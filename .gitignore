@@ -41,3 +41,6 @@ build/
 
 # ChromaDB
 chroma_db/
+# ForeSight generated market data
+data/raw/
+data/processed/*.csv

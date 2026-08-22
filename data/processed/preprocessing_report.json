@@ -1,0 +1,82 @@
+{
+  "generated_at_utc": "2026-08-22T20:53:39.491291+00:00",
+  "raw_source": {
+    "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\raw\\global_financial_markets_2000_Now.csv",
+    "sha256": "8437e55b063cae5d327972cd41c0811ca346fdd00931e8de6158ea16c2a66284",
+    "size_bytes": 15472250,
+    "note": "immutable; read-only input"
+  },
+  "config": {
+    "symbol": "^GSPC",
+    "ma_windows": [
+      20,
+      50,
+      200
+    ],
+    "volatility_window": 20,
+    "annualization": "sample std of daily log returns x sqrt(252)",
+    "validation_start": "2019-01-01",
+    "test_start": "2023-01-01",
+    "with_targets": true
+  },
+  "cleaning": {
+    "original_rows_total": 6698,
+    "symbol_rows": 6698,
+    "rows_removed": 0,
+    "rows_retained": 6698,
+    "duplicates_found": 0,
+    "missing_values_in_symbol": 0,
+    "invalid_records_removed": 0,
+    "ohlc_violations_logged_not_removed": 0,
+    "negative_price_rows_kept": 0,
+    "zero_volume_rows_kept": 1,
+    "date_range_before_cleaning": [
+      "2000-01-03",
+      "2026-08-20"
+    ],
+    "date_range_after_cleaning": [
+      "2000-01-03",
+      "2026-08-20"
+    ],
+    "removals": [],
+    "warnings": []
+  },
+  "weekday_gaps": {
+    "missing_1_weekdays": 243,
+    "missing_2_weekdays": 2,
+    "missing_4_weekdays": 1,
+    "interpretation": "US market holidays/closures; not fabricated or filled"
+  },
+  "outputs": {
+    "clean": {
+      "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_clean.csv",
+      "rows": 6698
+    },
+    "features": {
+      "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_features.csv",
+      "rows": 6698
+    },
+    "targets": {
+      "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_targets.csv",
+      "rows": 6698
+    },
+    "splits": {
+      "train": {
+        "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_features_train.csv",
+        "rows": 4779
+      },
+      "validation": {
+        "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_features_validation.csv",
+        "rows": 1008
+      },
+      "test": {
+        "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_features_test.csv",
+        "rows": 911
+      }
+    }
+  },
+  "notes": [
+    "extracted 6698 of 189787 rows for symbol ^GSPC",
+    "cleaning retained 6698 of 6698 rows for ^GSPC"
+  ]
+}
