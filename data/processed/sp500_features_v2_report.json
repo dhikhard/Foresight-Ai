@@ -1,0 +1,92 @@
+{
+  "generated_at_utc": "2026-08-23T11:08:51.666873+00:00",
+  "input": {
+    "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_clean.csv",
+    "sha256": "d839aa8b6222d77772446790493f4405302996842d99974bac250c2a66c1cd62",
+    "size_bytes": 597204,
+    "note": "canonical cleaned series produced by backend.pipeline.run_preprocess"
+  },
+  "output": {
+    "path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_features_v2.csv",
+    "rows": 6698,
+    "columns": [
+      "date",
+      "ret_lag_1",
+      "ret_lag_2",
+      "ret_lag_5",
+      "ret_lag_10",
+      "ret_lag_20",
+      "mom_5",
+      "mom_10",
+      "mom_20",
+      "ma_dist_20",
+      "ma_dist_50",
+      "ma_dist_200",
+      "vol_60_annualized",
+      "vol_ratio_20_60",
+      "vol_change_5d",
+      "rsi_14",
+      "bollinger_pctb_20"
+    ],
+    "report_path": "C:\\Users\\Acer\\Desktop\\foresight-engine\\data\\processed\\sp500_features_v2_report.json"
+  },
+  "feature_warmup": {
+    "declared": {
+      "ret_lag_1": 2,
+      "ret_lag_2": 3,
+      "ret_lag_5": 6,
+      "ret_lag_10": 11,
+      "ret_lag_20": 21,
+      "mom_5": 5,
+      "mom_10": 10,
+      "mom_20": 20,
+      "ma_dist_20": 19,
+      "ma_dist_50": 49,
+      "ma_dist_200": 199,
+      "vol_60_annualized": 60,
+      "vol_ratio_20_60": 60,
+      "vol_change_5d": 25,
+      "rsi_14": 14,
+      "bollinger_pctb_20": 19
+    },
+    "observed_first_valid": {
+      "ret_lag_1": 2,
+      "ret_lag_2": 3,
+      "ret_lag_5": 6,
+      "ret_lag_10": 11,
+      "ret_lag_20": 21,
+      "mom_5": 5,
+      "mom_10": 10,
+      "mom_20": 20,
+      "ma_dist_20": 19,
+      "ma_dist_50": 49,
+      "ma_dist_200": 199,
+      "vol_60_annualized": 60,
+      "vol_ratio_20_60": 60,
+      "vol_change_5d": 25,
+      "rsi_14": 14,
+      "bollinger_pctb_20": 19
+    }
+  },
+  "none_counts": {
+    "ret_lag_1": 2,
+    "ret_lag_2": 3,
+    "ret_lag_5": 6,
+    "ret_lag_10": 11,
+    "ret_lag_20": 21,
+    "mom_5": 5,
+    "mom_10": 10,
+    "mom_20": 20,
+    "ma_dist_20": 19,
+    "ma_dist_50": 49,
+    "ma_dist_200": 199,
+    "vol_60_annualized": 60,
+    "vol_ratio_20_60": 60,
+    "vol_change_5d": 25,
+    "rsi_14": 14,
+    "bollinger_pctb_20": 19
+  },
+  "notes": [
+    "deterministic generation: identical input yields identical feature bytes"
+  ]
+}
