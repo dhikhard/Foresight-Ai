@@ -1,0 +1,286 @@
+{
+  "generated_at_utc": "2026-08-23T18:44:16.636330+00:00",
+  "feature_set": "v1",
+  "target": "target_return_1d",
+  "feature_columns": [
+    "return",
+    "log_return",
+    "ma_20",
+    "ma_50",
+    "ma_200",
+    "vol_20_annualized",
+    "rolling_peak",
+    "drawdown",
+    "daily_range",
+    "open_close_return"
+  ],
+  "protocol": {
+    "horizon": "1 trading day",
+    "prediction_semantics": "at close(t), features use information through close(t); target is close(t+1)/close(t)-1",
+    "split_boundaries": {
+      "train": "< 2019-01-01",
+      "validation": "2019-01-01 <= d < 2023-01-01",
+      "test": ">= 2023-01-01"
+    },
+    "row_policy": "rows missing any feature or the target are dropped before splitting; warm-up values are never imputed",
+    "scaling": "standardize; statistics fit on TRAIN only, then frozen",
+    "alpha_selection": {
+      "criterion": "validation MAE",
+      "grid": [
+        0.01,
+        0.1,
+        1.0,
+        10.0,
+        100.0
+      ]
+    },
+    "test_discipline": "TEST scored once as holdout after all decisions are frozen; never used for model, feature-set, or hyperparameter choices",
+    "feature_set_winner_rule": "lower validation ridge MAE between v1 and v2 wins; test metrics do not change the winner",
+    "methodology_version": 2,
+    "methodology_notes": "2026-08-23: corrected ridge fit/predict scale mismatch (ridge was previously fit on raw TRAIN X while predicting on standardized matrices). Reports generated before this correction, including the original Week-3 modeling report, are superseded."
+  },
+  "rows": {
+    "train": 4580,
+    "validation": 1008,
+    "test": 910
+  },
+  "dataset_dropped_missing_feature": 199,
+  "dataset_dropped_missing_target": 1,
+  "date_range": [
+    "2000-10-16",
+    "2026-08-19"
+  ],
+  "preprocessing": {
+    "method": "standardize, fit on TRAIN only",
+    "means": [
+      0.00020311577390829693,
+      0.0001312613782532751,
+      1504.7115312620087,
+      1500.7572394956333,
+      1478.8950364237992,
+      0.16078583834777294,
+      1763.5293055895197,
+      -0.162175446365524,
+      0.013065651103144104,
+      0.0001636559002401747
+    ],
+    "stds": [
+      0.011982284693024639,
+      0.011990788699850756,
+      518.7016204718946,
+      513.4859482118414,
+      481.0323592034749,
+      0.10406875390629462,
+      384.7154521475926,
+      0.1362194438359238,
+      0.010085419636963067,
+      0.011485964988829096
+    ]
+  },
+  "results": {
+    "zero_return": {
+      "model": "zero_return",
+      "selection": "fixed rule",
+      "splits": [
+        {
+          "split": "train",
+          "n": 4580,
+          "mae": 0.00792422100554585,
+          "rmse": 0.01198401979260839,
+          "r2": -0.00028792904229169025,
+          "directional_accuracy": 0.5353711790393013,
+          "mean_actual_return": 0.00020332123545851528,
+          "mean_predicted_return": 0.0,
+          "prediction_std": 0.0
+        },
+        {
+          "split": "validation",
+          "n": 1008,
+          "mae": 0.009367467526587302,
+          "rmse": 0.01443205773935705,
+          "r2": -0.0013120128269332731,
+          "directional_accuracy": 0.5406746031746031,
+          "mean_actual_return": 0.0005224113271825397,
+          "mean_predicted_return": 0.0,
+          "prediction_std": 0.0
+        },
+        {
+          "split": "test",
+          "n": 910,
+          "mae": 0.006582357476483516,
+          "rmse": 0.009371824309710071,
+          "r2": -0.0074221790418567135,
+          "directional_accuracy": 0.5604395604395604,
+          "mean_actual_return": 0.000804422292967033,
+          "mean_predicted_return": 0.0,
+          "prediction_std": 0.0
+        }
+      ]
+    },
+    "train_mean": {
+      "model": "train_mean",
+      "selection": "fixed rule",
+      "splits": [
+        {
+          "split": "train",
+          "n": 4580,
+          "mae": 0.007913100328544496,
+          "rmse": 0.01198229489141547,
+          "r2": 0.0,
+          "directional_accuracy": 0.5353711790393013,
+          "mean_actual_return": 0.00020332123545851528,
+          "mean_predicted_return": 0.00020332123545851528,
+          "prediction_std": 0.0
+        },
+        {
+          "split": "validation",
+          "n": 1008,
+          "mae": 0.009353082403176161,
+          "rmse": 0.014426128915409136,
+          "r2": -0.0004894851815615553,
+          "directional_accuracy": 0.5406746031746031,
+          "mean_actual_return": 0.0005224113271825397,
+          "mean_predicted_return": 0.00020332123545851528,
+          "prediction_std": 0.0
+        },
+        {
+          "split": "test",
+          "n": 910,
+          "mae": 0.006561529532047604,
+          "rmse": 0.009356565510270752,
+          "r2": -0.0041443670776388775,
+          "directional_accuracy": 0.5604395604395604,
+          "mean_actual_return": 0.000804422292967033,
+          "mean_predicted_return": 0.00020332123545851528,
+          "prediction_std": 0.0
+        }
+      ]
+    },
+    "persistence": {
+      "model": "persistence",
+      "selection": "fixed rule",
+      "splits": [
+        {
+          "split": "train",
+          "n": 4580,
+          "mae": 0.01187480250779476,
+          "rmse": 0.01759692395056812,
+          "r2": -1.1567187152119782,
+          "directional_accuracy": 0.46943231441048033,
+          "mean_actual_return": 0.00020332123545851528,
+          "mean_predicted_return": 0.00020311577390829693,
+          "prediction_std": 0.011982284693024639
+        },
+        {
+          "split": "validation",
+          "n": 1008,
+          "mae": 0.013912528695634922,
+          "rmse": 0.022423607960383205,
+          "r2": -1.4172629459941772,
+          "directional_accuracy": 0.4871031746031746,
+          "mean_actual_return": 0.0005224113271825397,
+          "mean_predicted_return": 0.0005276385406746033,
+          "prediction_std": 0.014421914127051464
+        },
+        {
+          "split": "test",
+          "n": 910,
+          "mae": 0.009602056727362638,
+          "rmse": 0.013465231619641357,
+          "r2": -1.0796530508172748,
+          "directional_accuracy": 0.4989010989010989,
+          "mean_actual_return": 0.000804422292967033,
+          "mean_predicted_return": 0.0008095523645054945,
+          "prediction_std": 0.009333312414715668
+        }
+      ]
+    },
+    "ridge": {
+      "model": "ridge",
+      "selection": {
+        "method": "validation MAE",
+        "grid": [
+          0.01,
+          0.1,
+          1.0,
+          10.0,
+          100.0
+        ],
+        "scores": [
+          {
+            "alpha": 0.01,
+            "val_mae": 0.00934802140866346
+          },
+          {
+            "alpha": 0.1,
+            "val_mae": 0.009352718744960147
+          },
+          {
+            "alpha": 1.0,
+            "val_mae": 0.00936790031893952
+          },
+          {
+            "alpha": 10.0,
+            "val_mae": 0.009354519015982162
+          },
+          {
+            "alpha": 100.0,
+            "val_mae": 0.00935541871326748
+          }
+        ],
+        "chosen_alpha": 0.01
+      },
+      "weights": {
+        "alpha": 0.01,
+        "weights": [
+          0.032579506095487806,
+          -0.032908351563578804,
+          -0.0004016715815629266,
+          0.0049746761611078735,
+          -0.0009667427346853189,
+          -0.0007289769903390771,
+          -0.002366776169173255,
+          -0.0020251399286552113,
+          4.4252736288023283e-05,
+          -0.0005213440996735524
+        ],
+        "intercept": 0.00020332123545844496
+      },
+      "splits": [
+        {
+          "split": "train",
+          "n": 4580,
+          "mae": 0.00790092745452797,
+          "rmse": 0.011917939511961653,
+          "r2": 0.010712898950158145,
+          "directional_accuracy": 0.5220524017467248,
+          "mean_actual_return": 0.00020332123545851528,
+          "mean_predicted_return": 0.00020332123545844515,
+          "prediction_std": 0.0012363598963026977
+        },
+        {
+          "split": "validation",
+          "n": 1008,
+          "mae": 0.00934802140866346,
+          "rmse": 0.014389909634958141,
+          "r2": 0.004528010480493672,
+          "directional_accuracy": 0.5257936507936508,
+          "mean_actual_return": 0.0005224113271825397,
+          "mean_predicted_return": 9.472953930362866e-05,
+          "prediction_std": 0.0021516600272837787
+        },
+        {
+          "split": "test",
+          "n": 910,
+          "mae": 0.006767899048809915,
+          "rmse": 0.00962492290634002,
+          "r2": -0.06257048951044131,
+          "directional_accuracy": 0.5197802197802198,
+          "mean_actual_return": 0.000804422292967033,
+          "mean_predicted_return": 0.0015703320534935714,
+          "prediction_std": 0.0018851777213381266
+        }
+      ]
+    }
+  }
+}
