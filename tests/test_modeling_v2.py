@@ -173,7 +173,8 @@ def test_run_v2_end_to_end_excludes_persistence(tmp_path):
     assert saved["feature_set"] == "v2"
     assert saved["feature_columns"] == list(FEATURE_COLUMNS_V2)
     # V2 has no same-day return column; ret_lag_1 is NOT a persistence input.
-    assert set(saved["results"]) == {"zero_return", "train_mean", "ridge"}
+    assert set(saved["results"]) == {"zero_return", "train_mean", "ridge",
+                                     "elastic_net"}
     assert sum(payload["rows"].values()) > 0
     for result in payload["results"].values():
         assert [s["split"] for s in result["splits"]] == \
@@ -186,7 +187,7 @@ def test_run_v2_end_to_end_excludes_persistence(tmp_path):
 def test_run_v1_end_to_end_includes_persistence(tmp_path):
     payload, _ = _run_synthetic(tmp_path, "v1")
     assert set(payload["results"]) == {"zero_return", "train_mean",
-                                       "persistence", "ridge"}
+                                       "persistence", "ridge", "elastic_net"}
 
 
 # ---------- protocol discipline ----------

@@ -44,3 +44,6 @@ chroma_db/
 # ForeSight generated market data
 data/raw/
 data/processed/*.csv
+
+# Demo runner output
+/demo_out/

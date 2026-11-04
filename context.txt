@@ -1,0 +1,1118 @@
+================================================================================
+ForeSightAI - PROJECT CONTINUITY / STATE FILE (context.txt)
+Last updated: 2026-08-24 (session date)
+================================================================================
+
+This file is the authoritative continuity record for the ForeSightAI rebuild.
+It reflects the actual repository state and was reconstructed from the working
+session that produced it. It is NOT committed history documentation beyond what
+git shows; it is a working-state snapshot for future sessions.
+
+--------------------------------------------------------------------------------
+1. PROJECT OBJECTIVE AND ARCHITECTURE
+--------------------------------------------------------------------------------
+Objective: rebuild ForeSightAI into an auditable, leakage-safe market
+forecasting system. Strategy: first construct a deterministic S&P 500 data
+pipeline and honest baseline forecasting layer with rigorous temporal-safety
+guarantees, THEN layer richer signals (news, prediction markets) on top.
+
+Current architecture layers:
+- backend/pipeline/          Deterministic market-data pipeline:
+                             ingest -> clean -> features(V1)/targets ->
+                             splits/config; plus Feature Set V2
+                             (features_v2.py, run_features_v2.py).
+- backend/modeling/          Leakage-safe modeling layer: dataset contract,
+                             train-only standardization, rule baselines,
+                             closed-form ridge, evaluation metrics,
+                             CLI runner (run_modeling.py).
+- backend/core/, services/, models/, main.py
+                             Phase-1 MVP RAG prototype components (untouched
+                             during the rebuild; deferred integration).
+
+--------------------------------------------------------------------------------
+2. COMPLETED WEEKS / PHASES
+--------------------------------------------------------------------------------
+Weeks 1-2   Data pipeline: ingest/clean/features/targets/splits/config,
+            byte-reproducible preprocessing, leakage tests.
+            Commits: 7384815 (MVP initial), fd796f5, c969d86.
+Week 3      Modeling layer (V1): dataset contract, TrainOnlyStandardizer,
+            zero/train-mean/persistence baselines, closed-form ridge,
+            evaluation metrics, CLI + report. NOTE: these artifacts were left
+            intentionally UNCOMMITTED at the time (see section 5); the ridge
+            results they produced were later found defective (section 8).
+Week 4 Phase 1  Feature Set V2 (16 stationary features). Commit: a24a67c.
+Week 4 Phase 2  V2 generator CLI + reproducibility proof. Commit: ab62122.
+Week 4 Phase 3  V1/V2 modeling wiring + RIDGE SCALE-MISMATCH CORRECTION +
+                independent verification. Commit: c0076ac.
+
+--------------------------------------------------------------------------------
+3. EXACT COMMITS (chronological)
+--------------------------------------------------------------------------------
+fd796f5  Add historical market data preprocessing pipeline
+c969d86  Harden ingestion and expand pipeline tests
+a24a67c  Add Feature Set V2: 16 stationary market features with leakage tests
+ab62122  Add Feature Set V2 generator CLI with reproducibility tests
+c0076ac  Fix ridge scaling and wire V2 modeling evaluation
+
+--------------------------------------------------------------------------------
+4. CURRENT HEAD
+--------------------------------------------------------------------------------
+HEAD = c0076aca8894aee98699cab04ab363cfc9ca0420  ("Fix ridge scaling and wire
+V2 modeling evaluation"), branch: master.
+
+--------------------------------------------------------------------------------
+5. CURRENT GIT STATUS (verified before writing this file)
+--------------------------------------------------------------------------------
+Tracked modifications (intentional, pre-existing Week-3 docs/deps):
+ M README.md                       (+41/-2: documents V1 modeling layer)
+ M backend/requirements.txt        (+1: declares numpy explicitly)
+
+Untracked (intentional pre-existing Week-3 modeling artifacts, NOT yet
+committed; dataset.py and run_modeling.py from this package WERE committed
+in c0076ac):
+ ?? backend/modeling/__init__.py
+ ?? backend/modeling/baselines.py
+ ?? backend/modeling/evaluation.py
+ ?? backend/modeling/preprocessing.py
+ ?? backend/modeling/regression.py
+ ?? tests/test_modeling.py
+
+Untracked new file created by this snapshot:
+ ?? context.txt
+
+NOTE/RISK: the committed backend/modeling/dataset.py and run_modeling.py
+import the still-uncommitted sibling modules above; the committed tree alone
+is not runnable until those land in an approved commit.
+
+--------------------------------------------------------------------------------
+6. WEEK 4 PHASE 1 - FEATURE SET V2 (commit a24a67c)
+--------------------------------------------------------------------------------
+backend/pipeline/features_v2.py defines the FROZEN contract:
+
+FEATURE_COLUMNS_V2 (exact order):
+  ret_lag_1, ret_lag_2, ret_lag_5, ret_lag_10, ret_lag_20,
+  mom_5, mom_10, mom_20,
+  ma_dist_20, ma_dist_50, ma_dist_200,
+  vol_60_annualized, vol_ratio_20_60, vol_change_5d,
+  rsi_14, bollinger_pctb_20
+
+FEATURE_WARMUP_V2 (first valid row index per feature):
+  ret_lags: 2/3/6/11/21; mom: 5/10/20; ma_dist: 19/49/199;
+  vol_60_annualized: 60; vol_ratio_20_60: 60; vol_change_5d: 25;
+  rsi_14: 14; bollinger_pctb_20: 19.  Max lookback = 199 (matches V1).
+
+Design intent: replace non-stationary price-level V1 features (raw ma_20/
+ma_50/ma_200, rolling_peak/drawdown levels) with scale-free stationary
+equivalents so models do not depend on absolute index level.
+
+Temporal/leakage guarantees (test-enforced):
+- every feature is backward-looking only;
+- future-perturbation probes: perturbing any close at row indices
+  {25, 60, 150, 199} leaves all EARLIER rows bit-identical;
+- dead-series policy: once close <= 0 is seen, the affected features are None
+  forever after (never silently recovered);
+- RSI uses Wilder smoothing (seed = mean of first 14 gains/losses).
+
+Tests: tests/test_features_v2.py - 23 tests, all passing at commit time.
+
+--------------------------------------------------------------------------------
+7. WEEK 4 PHASE 2 - V2 GENERATOR CLI (commit ab62122)
+--------------------------------------------------------------------------------
+backend/pipeline/run_features_v2.py:
+- CLI mirrors run_preprocess.py conventions (argparse; generate() returning a
+  payload; main() prints summary; reuses _write_csv/_sha256/_format/
+  symbol_slug from run_preprocess);
+- strict parsing with loud contextual failures (empty/non-numeric close,
+  missing columns, header-only input); volume-empty rows are skipped and the
+  exception is documented;
+- emits data/processed/sp500_features_v2.csv (date + 16 columns, ALL rows
+  incl. warm-up empties) plus a provenance report JSON containing: input
+  path/row count/sha256, output schema, declared-vs-OBSERVED warm-up audit,
+  per-feature None counts, and generated_at_utc (only nondeterministic field).
+
+Reproducibility verification (tests + real data):
+- repeated generation into the SAME output directory reproduces byte-identical
+  CSV; report content identical except timestamp (non-vacuity guarded);
+- REAL DATA: input data/processed/sp500_clean.csv = 6,698 rows, sha256 prefix
+  d839aa8b6222d777; two full runs produced identical output sha256
+  5323D48266CCAA121DC71E25231A6A5073050E30DBD11CB89AD9D215C0998489;
+- 0 warm-up mismatches; summed None counts = 523 = sum of declared warm-ups
+  (43+35+267+60+60+25+14+19 across the 8 distinct values).
+
+Tests: tests/test_features_v2_cli.py - 14 tests. Repo convention: provenance
+report JSONs are tracked (precedent: preprocessing_report.json); processed
+CSVs are gitignored (data/processed/*.csv).
+
+Commit: ab62122 "Add Feature Set V2 generator CLI with reproducibility tests".
+
+--------------------------------------------------------------------------------
+8. WEEK 4 PHASE 3 - MODELING WIRING + RIDGE CORRECTION (commit c0076ac)
+--------------------------------------------------------------------------------
+Additive wiring (V1 default preserved byte-compatibly):
+- dataset.py: FEATURE_SETS registry {v1,v2} + resolve_feature_set();
+  build_model_dataset(feature_rows, target_rows, feature_columns=...);
+- run_modeling.py: --feature-set {v1,v2}; per-set default input CSV and
+  report JSON; persistence baseline GATED: it requires a same-day 'return'
+  column, therefore V2 runs score zero_return/train_mean/ridge only
+  (ret_lag_1 is YESTERDAY'S return and must never be treated as persistence
+  input); reports carry a deterministic "protocol" block (horizon, semantics,
+  split boundaries, row policy, scaling, alpha selection criterion+grid,
+  test discipline, pre-registered winner rule, methodology_version).
+
+DEFECT DISCOVERED (via mandated independent verification):
+- RidgeRegressor was FIT on raw train["X"] but all predictions used
+  TRAIN-standardized matrices -> scale mismatch. Symptom: validation MAE
+  collapsed monotonically toward alpha=100 (V1 0.0700->0.0096; V2
+  0.0726->0.0095), making heavy regularization "win" purely by shrinking the
+  mismatch behind the intercept. This invalidated all pre-correction ridge
+  results, including the original Week-3 conclusions and my earlier summaries.
+
+EXACT FIX (run_modeling.py): grid fit and refit changed to
+  RidgeRegressor(alpha=...).fit(transformed["train"], train["y"])
+(prediction paths already correct: transformed["validation"]/transformed[split]).
+Scaler remains fit on TRAIN rows only; splits/grid/target/persistence untouched.
+
+REGRESSION GUARD: test_ridge_fit_receives_train_standardized_matrix spies on
+every RidgeRegressor.fit call inside a real run(), capturing the actual design
+matrix and comparing element-wise against an independently hand-reconstructed
+TRAIN-standardized matrix (raw csv parse -> manual drop policy -> manual
+chronological boundary -> manual population statistics). Fails loudly under
+the raw-fit bug; also asserts exactly len(grid)+1 fits and scaler-mean equality.
+
+INDEPENDENT NUMPY VERIFICATION (separate implementation bypassing
+RidgeRegressor, TrainOnlyStandardizer, build_model_dataset, PipelineConfig):
+curve deltas <= 1.9e-17 (V1) and 0.0 (V2); argmin matches reports; post-freeze
+TEST MAE matches to machine precision. OVERALL: PASS.
+
+CORRECTED RESULTS (methodology_version = 2 in both reports):
+alpha grid {0.01, 0.1, 1, 10, 100}, selection = VALIDATION MAE ONLY.
+  V1 curve: 0.0093480214 / 0.0093527187 / 0.0093679003 /
+            0.0093545190 / 0.0093554187   -> chosen alpha = 0.01
+  V2 curve: 0.0093771138 / 0.0093771240 / 0.0093772247 /
+            0.0093781938 / 0.0093847765   -> chosen alpha = 0.01
+
+VALIDATION WINNER (pre-registered rule, validation ridge MAE only): V1
+(0.0093480214 < 0.0093771138). The buggy comparison had flipped this to V2.
+Caveat recorded honestly: corrected V1 ridge beats its own train_mean
+baseline (val MAE 0.009353) by only ~5e-6 - noise-level; NO exploitable edge.
+
+FINAL TEST METRICS (scored ONCE per set, after alpha/winner frozen):
+  V1 ridge (alpha=0.01): MAE 0.006768  RMSE 0.009625  R2 -0.0626  DirAcc 0.5198
+  V2 ridge (alpha=0.01): MAE 0.006642  RMSE 0.009382  R2 -0.0096  DirAcc 0.5066
+  zero_return baseline : MAE 0.006582  RMSE 0.009372  R2 -0.0074  DirAcc 0.5604
+Both ridges remain below the trivial baseline's directional accuracy.
+
+TEST SUITE AT COMMIT: 99 passed / 0 failed / 0 skipped / no warnings
+ (= 33 pipeline + 15 Week-3 modeling + 23 Phase-1 V2 + 14 Phase-2 CLI
+    + 14 Phase-3 modeling-v2).
+
+Supersession marker: both regenerated reports carry
+"methodology_version": 2 and a methodology_notes correction statement; the
+corrected data/processed/modeling_report.json SUPERSEDES the pre-correction
+Week-3 report content. No git history was rewritten or amended.
+
+Commit: c0076ac "Fix ridge scaling and wire V2 modeling evaluation".
+
+--------------------------------------------------------------------------------
+9. ARCHITECTURAL DECISIONS AND FROZEN CONVENTIONS
+--------------------------------------------------------------------------------
+- Chronological splits from PipelineConfig, applied everywhere:
+  train < 2019-01-01 | validation 2019-01-01..2022-12-31 | test >= 2023-01-01.
+  Real usable rows: 4580 / 1008 / 910 (2000-10-16 .. 2026-08-19).
+- Target: target_return_1d = close(t+1)/close(t) - 1; horizon 1 trading day;
+  features use information through close(t) only; targets NEVER in X.
+- Missing data policy: DROP rows missing any feature/target (warm-up rows and
+  final row); NEVER impute; drop counts logged in reports.
+- Scaling: standardize with statistics fit on TRAIN only; VAL/TEST transformed
+  with frozen statistics. Models fit on the SAME standardized representation
+  they predict on (post-correction invariant, test-enforced).
+- Selection discipline: alpha grid {0.01,0.1,1,10,100} chosen by VALIDATION
+  MAE only; TEST scored exactly ONCE per configuration after decisions freeze;
+  test metrics are holdout records and never selection inputs; feature-set
+  winner decided by lower validation ridge MAE only.
+- Reproducibility: no randomness anywhere; reruns reproduce byte/substantive-
+  identical outputs except documented timestamps (generated_at_utc).
+- CLI conventions mirror run_preprocess.py (argparse; run/generate functions
+  returning payloads; main prints summaries; shared serialization helpers).
+- Provenance report JSONs are tracked in git; processed CSVs are gitignored.
+- Process gates: each phase ends with a report and an explicit user approval
+  gate before implementation and again before commits.
+
+--------------------------------------------------------------------------------
+10. DATA CURRENTLY AVAILABLE
+--------------------------------------------------------------------------------
+data/raw/sp500_2000-present.csv     Raw ingested source (gitignored).
+data/processed/sp500_clean.csv      Canonical cleaned series, 6,698 rows,
+                                    ~2000-01 .. 2026-08; sha256 prefix
+                                    d839aa8b6222d777 (gitignored).
+data/processed/sp500_features.csv   V1 sidecar (10 raw price-level features).
+data/processed/sp500_features_v2.csv V2 sidecar (16 stationary features),
+                                    sha256 5323D48266CCAA121DC71E25231A6A507
+                                    3050E30DBD11CB89AD9D215C0998489
+                                    (gitignored).
+data/processed/sp500_targets.csv    Forward targets: target_return_{1d,5d,10d}
+                                    + target_future_vol_20.
+Reports (tracked): preprocessing_report.json, sp500_features_v2_report.json,
+modeling_report.json (v1, methodology_version=2),
+modeling_report_v2.json (v2, methodology_version=2).
+
+--------------------------------------------------------------------------------
+11. FUTURE-DATA CONSIDERATIONS (NOT YET INTEGRATED)
+--------------------------------------------------------------------------------
+The following exist only as the untouched Phase-1 MVP scaffold; NONE have been
+integrated into the rebuilt pipeline/modeling stack:
+- external market NEWS / sentiment / trend data;
+- Kalshi prediction-market data;
+- Polymarket prediction-market data;
+- RAG engine wiring (backend/services/rag_engine.py, core/prompts.py),
+  API surface (main.py, models/schemas.py), any UI.
+When integrated, these MUST respect publication-time availability (features
+may only use information known strictly before the prediction timestamp) and
+the established split/scaling/selection disciplines.
+
+--------------------------------------------------------------------------------
+12. FILES THAT MUST REMAIN UNTOUCHED unless a future approved phase
+    explicitly requires them
+--------------------------------------------------------------------------------
+- backend/pipeline/{ingest,clean,features,targets,splits,config}.py and
+  run_preprocess.py (frozen V1 pipeline)
+- backend/pipeline/features_v2.py and run_features_v2.py (frozen Phase 1/2)
+- tests/test_pipeline.py, tests/test_features_v2.py,
+  tests/test_features_v2_cli.py (frozen suites)
+- data/raw/* and all existing processed outputs/reports
+- README.md and requirements.txt carry intentional UNCOMMITTED Week-3 edits;
+  keep them out of unrelated commits
+- the untracked Week-3 modeling modules and tests/test_modeling.py (see 5)
+
+--------------------------------------------------------------------------------
+13. KNOWN RISKS / ISSUES
+--------------------------------------------------------------------------------
+- Committed modeling entry points import still-uncommitted sibling modules;
+  intermediate commits do not form a runnable tree until those land.
+- No predictive edge demonstrated: corrected ridge performs at/below trivial
+  baselines (validation gap vs train_mean is ~5e-6; test DirAcc below the
+  zero-return baseline). Any "edge" claims would be premature.
+- The Week-4 test split has now been observed once per feature set under the
+  pre-registered decision; future phases must define fresh holdout discipline
+  rather than re-using test performance for new selections.
+- Single-asset scope (S&P 500 index only); regime coverage limited to
+  2000-present with one market.
+- context.txt is itself untracked; decide deliberately whether/when to commit.
+
+--------------------------------------------------------------------------------
+14. NEXT PLANNED PHASE: PHASE 4
+--------------------------------------------------------------------------------
+NOT DEFINED. With Week 4 complete (stationary V2 features, reproducible
+generator, corrected modeling comparison), candidate directions include:
+landing the remaining Week-3 modeling modules/tests as their own commit,
+README/documentation updates, richer targets/horizons, model families beyond
+ridge, or external data integration (news / Kalshi / Polymarket). None of
+these is authorized or scheduled yet.
+
+--------------------------------------------------------------------------------
+15/16. APPROVAL GATE (binding convention)
+--------------------------------------------------------------------------------
+Phase 4 scope must be EXPLICITLY DEFINED and APPROVED before implementation.
+Generic phrases such as "continue", "next", or "move forward" DO NOT authorize
+coding. Implementation begins only upon an explicit statement equivalent to:
+
+    "Approve Phase 4 implementation."
+
+--------------------------------------------------------------------------------
+17. CURRENT STATUS
+--------------------------------------------------------------------------------
+PHASE 3 IS COMPLETE (committed as c0076ac; 99/99 tests green; independent
+verification PASS; corrected reports regenerated with methodology_version 2).
+PHASE 4 HAS NOT STARTED as an approved phase. However, a readiness probe and
+infrastructure scaffold have been created (uncommitted, untracked).
+
+--------------------------------------------------------------------------------
+18. PHASE 4 READINESS PROBE — KALSHI (2026-08-26, uncommitted)
+--------------------------------------------------------------------------------
+An incremental readiness probe was performed for Kalshi API integration.
+No real API credentials were used; no data was fetched; no commits were made.
+
+DEPENDENCIES:
+- cryptography 50.0.0 INSTALLED (not declared in requirements.txt — finding)
+- tzdata 2026.3 INSTALLED (not declared in requirements.txt — finding)
+- zoneinfo.ZoneInfo("America/New_York") verified working with IANA DB
+- python-dotenv, urllib, hashlib, csv, json all available
+
+AUTHENTICATION IMPLEMENTATION (VERIFIED with synthetic RSA-2048 key):
+- RSA-PSS-SHA256 signing: IMPLEMENTED, VERIFIED, independently verified
+  (wrong message rejected, wrong public key rejected)
+- Required headers: KALSHI-ACCESS-KEY, KALSHI-ACCESS-SIGNATURE,
+  KALSHI-ACCESS-TIMESTAMP, User-Agent — all four verified
+- Signed message format: "{timestamp_ms}{method}{path}" — verified
+- Timestamp: int(time.time() * 1000) milliseconds — verified
+- Path/query: signs subpath WITHOUT query params per Kalshi docs — verified
+- Credential loading: KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY_PATH env vars;
+  raises EnvironmentError if missing — verified
+- Invalid PEM: raises FileNotFoundError — verified
+- SnapshotWriter: append-only dirs, JSON/manifest writing, SHA-256 integrity —
+  all verified
+
+REAL API PROBE:
+- Keyless probe to https://external-api.kalshi.com/trade-api/v2/markets
+  returned HTTP 403 Forbidden
+- Kalshi REQUIRES authentication for market data reads (no keyless public
+  access for market data)
+- BLOCKED: No Kalshi credentials configured (no .env file, no env vars set)
+- Real authenticated probe cannot be performed until user creates .env with:
+    KALSHI_API_KEY_ID=<your-key-id>
+    KALSHI_PRIVATE_KEY_PATH=<path-to-pem-file>
+
+POINT-IN-TIME / TEMPORAL SAFETY AUDIT:
+- Market metadata fields: open_time, close_time, created_time, status,
+  result, settlement_ts, settlement_value_dollars, expiration_value,
+  updated_time, occurrence_datetime, latest_expiration_time
+- CORRECT observation timestamps for as-of joins: close_time (metadata),
+  end_period_ts (candles)
+- MUST NOT use: updated_time (reflects post-settlement edits),
+  settlement_ts (future info), result/expiration_value (future info)
+- split_kalshi_resolution() quarantines settlement fields into separate table
+- Raw snapshots of settled markets CONTAIN settlement data; quarantine
+  is mandatory before feature construction
+- Synthetic candle guard: include_latest_before_start=False at API level +
+  parser excludes synthetic=True rows — DOUBLE guard, correct
+- Candle data: end_period_ts is inherently point-in-time safe when fetched
+  with appropriate time bounds
+
+SNAPSHOT / PROVENANCE AUDIT:
+- SnapshotWriter produces directories: {source}/{timestamp}-{slug}/
+- Manifest contains 9 fields: source, endpoint, request_params,
+  http_status, raw_files (SHA-256), row_counts, generated_at_utc,
+  code_version, snapshot_dir
+- SHA-256 integrity: manifest hash matches recompute — VERIFIED
+- Append-only invariant: FileExistsError on duplicate — VERIFIED
+- Existing convention: provenance reports tracked, processed CSVs gitignored
+
+FROZEN FILES:
+- No frozen pipeline files touched (ingest/clean/features/targets/splits/config/
+  run_preprocess/features_v2/run_features_v2)
+- No frozen test files touched (test_pipeline/test_features_v2/test_features_v2_cli)
+- HEAD unchanged: c0076ac
+
+TESTS:
+- External test suite: 66 passed, 1 skipped (calendar integration)
+- Full suite: 165 passed, 1 skipped
+- Baseline comparison: IDENTICAL (no regressions)
+
+FINDINGS / BLOCKERS:
+1. BLOCKED: Real Kalshi probe requires user-supplied credentials
+2. FINDING: cryptography and tzdata are installed but not in requirements.txt
+3. FINDING: Kalshi requires authentication for all market data reads (403 keyless)
+4. ARCHITECTURE NOTE: Raw snapshots contain settlement data; split_kalshi_resolution()
+   MUST be applied before any feature construction
+5. ARCHITECTURE NOTE: updated_time in lifecycle rows is post-settlement info;
+   consumers must use close_time for point-in-time correctness
+
+NOT PERFORMED:
+- No real Kalshi data fetched
+- No Kalshi features integrated into forecasting model
+- No training/test methodology altered
+- No commits created
+
+--------------------------------------------------------------------------------
+19. PHASE 4 READINESS PROBE — POLYMARKET (2026-08-26, uncommitted)
+--------------------------------------------------------------------------------
+A read-only API readiness probe was performed for Polymarket integration.
+Real API endpoints were hit with minimal requests. No data was persisted to
+snapshots. No commits were made.
+
+DNS / CONNECTIVITY (VERIFIED):
+- gamma-api.polymarket.com: REACHABLE (HTTP 200, ~810ms)
+- clob.polymarket.com: REACHABLE (HTTP 200, ~482ms)
+- data-api.polymarket.com: REACHABLE (HTTP 400/429 — functional but limited)
+
+AUTHENTICATION (VERIFIED):
+- Gamma API: PUBLIC, NO AUTH REQUIRED for market/event discovery
+- CLOB API: PUBLIC, NO AUTH REQUIRED for prices-history, /book, /markets, /time
+- Data API: PUBLIC, NO AUTH REQUIRED but rate-limited (429 at ~1 req/sec)
+- All tested endpoints are keyless. NO credentials needed for read-only probe.
+
+GAMMA API SCHEMA (VERIFIED from real response to /markets/559652):
+Market object fields (60+ fields total). ForeSight-relevant fields:
+- id (str): market identifier e.g. "559652"
+- slug (str): human-readable slug
+- question (str): market question/title
+- conditionId (str): hex condition ID, used as CLOB market identifier
+- clobTokenIds (str, JSON-encoded): ['YES_TOKEN_ID', 'NO_TOKEN_ID']
+- outcomes (str, JSON-encoded): ["Yes", "No"]
+- outcomePrices (str, JSON-encoded): ["0.1435", "0.8565"]
+- lastTradePrice (float): last trade price
+- bestAsk / bestBid (float): current order book
+- active (bool), closed (bool), archived (bool)
+- startDate / endDate (str, ISO-8601): market time window
+- closedTime (str, ISO-8601): when market was closed
+- createdAt / updatedAt (str, ISO-8601): creation and last update
+- volume (str), volumeNum (float): total volume
+- volume1mo / volume1wk / volume24hr: periodic volumes
+- liquidity / liquidityNum: current liquidity
+- oneDayPriceChange / oneWeekPriceChange / oneMonthPriceChange
+- version (str): "v1"
+- negRisk (bool): neg-risk market flag
+- negRiskMarketID (str): neg-risk parent ID
+
+CLOB API SCHEMA (VERIFIED from real responses):
+/prices-history response:
+- history: list of {t: int, p: float} where t = UNIX epoch seconds, p = probability [0,1]
+- Timestamps are observation times (close-of-period prices)
+- fidelity parameter controls granularity in minutes (60 = hourly, 1440 = daily)
+
+/book response:
+- market (str): condition_id
+- asset_id (str): token_id
+- bids: list of {price: str, size: str}
+- asks: list of {price: str, size: str}
+- timestamp (str): milliseconds since epoch
+- last_trade_price, hash, tick_size, min_order_size, neg_risk
+
+/markets response:
+- data: list of market objects
+- next_cursor (str): cursor-based pagination
+- count, limit
+- Market objects include tokens (list of {token_id, outcome, price, winner})
+
+/time response:
+- time (int): server timestamp in milliseconds
+
+VALID INTERVAL/FIDELITY COMBOS (VERIFIED):
+  interval=1h  fidelity=60:  ~2 points
+  interval=6h  fidelity=60:  ~7 points
+  interval=1d  fidelity=60:  ~25 points
+  interval=1w  fidelity=60:  ~169 points
+  interval=1m  fidelity=60:  ~743 points
+  interval=all fidelity=60:  ~743 points (same as max)
+  interval=max fidelity=60:  ~743 points
+  interval=max fidelity=1440: ~380 points (daily)
+  interval=1y: 400 BAD REQUEST (not a valid interval)
+  startTs/endTs: supported but CRITICAL SAFETY ISSUE (see below)
+
+PAGINATION (VERIFIED):
+- Gamma: offset+limit pagination (offset=0,5,10,...). 50 unique markets
+  across 10 pages of 5. after_cursor parameter does NOT work for /markets.
+- CLOB /markets: cursor-based pagination via next_cursor. Returns 1000 items/page.
+
+RATE LIMITS:
+- No rate-limit headers returned by either Gamma or CLOB.
+- Data API returns HTTP 429 (Too Many Requests) after ~1 request/sec.
+- Documented rate limits in external_config.py are from Polymarket docs
+  (not verified from headers since none are returned).
+- No rate-limit enforcement needed for read-only probes at current cadence.
+
+DATA API (NOT YET FULLY EXPLAINED):
+- /activity requires a 'user' parameter (user-specific trade history)
+- /markets, /events, /prices-history, /timeseries: all return 404
+- This API appears to serve user-specific activity/trade data, NOT market
+  discovery or price history. NOT relevant for ForeSight use case.
+- CLOB + Gamma cover all needed read-only endpoints.
+
+CRITICAL POINT-IN-TIME SAFETY FINDING (VERIFIED):
+CLOB /prices-history ALWAYS appends the LATEST observation regardless of
+endTs parameter. Evidence:
+  Query: startTs=2025-07-19, endTs=2025-07-20
+  Result: 2 points — Jul 19 (in range) + Aug 26 2026/TODAY (OUT OF RANGE)
+This means startTs/endTs CANNOT be used to constrain historical queries to
+a specific time window. The API always includes the most recent price.
+
+SAFE WORKAROUND (VERIFIED via real-data validation 2026-08-26):
+When interval=max, fidelity=1440 (daily), the full series is returned with
+daily granularity. The timestamps are observation-close times (~00:00 UTC).
+For point-in-time reconstruction:
+  1. Fetch interval=max fidelity=1440 (full daily history)
+  2. Filter observations where t <= prediction_timestamp
+  3. Take the latest qualifying observation
+This is SAFE because (all VERIFIED by real-data test with market 559652):
+  - The full series is deterministic and append-only
+  - Each observation has an explicit UNIX timestamp (int in t_unix_s field)
+  - The latest observation (today's) is also appended but IS EXCLUDED by
+    t <= prediction_timestamp filtering
+  - The daily timestamps are observation-close times, not query-time
+  - startTs/endTs filtering is NOT safe (always includes latest point)
+  - parse_polymarket_prices() returns t_unix_s as int (VERIFIED)
+  - _parse_to_utc() handles int UNIX timestamps natively (VERIFIED)
+  - Deterministic: two independent parse runs produce identical output (VERIFIED)
+  - SnapshotWriter archives immutable snapshots with SHA-256 manifests (VERIFIED)
+
+HISTORICAL DATA COVERAGE (VERIFIED):
+- Active market (id=559652, "Gavin Newsom 2028"): 380 daily points
+  spanning 2025-07-19 to 2026-08-26 (~13 months)
+- This market was created 2025-07-03, first price data 2025-07-19
+- Delta between consecutive daily points: ~86400s (24h) with minor drift
+  (86382-86418s range due to UTC alignment)
+- Large gaps exist (deltas up to 1,123,176s = ~13 days) for some periods,
+  likely reflecting days with no trading activity
+
+TEMPORAL SAFETY ASSESSMENT:
+Observation timestamps for as-of joins:
+- CORRECT: t (UNIX epoch seconds) from /prices-history — represents when
+  the price observation was recorded (close-of-period)
+- CORRECT: Gamma startDate/endDate — market time window
+- CORRECT: Gamma createdAt — market creation time
+- MUST NOT use: Gamma outcomePrices (current state, leakage risk)
+- MUST NOT use: Gamma lastTradePrice (current state, leakage risk)
+- MUST NOT use: Gamma updatedAt (continuously updated, leakage risk)
+- MUST NOT use: CLOB /book timestamp (current state, leakage risk)
+- MUST NOT use: CLOB /prices-history latest point if endTs filtering fails
+
+as-of join construction:
+  observation.t <= prediction_timestamp → INCLUDE
+  observation.t >  prediction_timestamp → EXCLUDE
+This is safe because CLOB daily observations have explicit UNIX timestamps.
+The challenge is that the API always appends the latest point, but this
+can be filtered out by the consumer (check if t <= prediction_timestamp).
+
+SNAPSHOT / PROVENANCE READINESS:
+Existing SnapshotWriter supports Polymarket snapshots:
+- snapshot_gamma_discovery(): writes Gamma market list snapshots
+- snapshot_prices_history(): writes CLOB price history snapshots
+- Manifest fields: source, endpoint, request_params, http_status,
+  raw_files (SHA-256), row_counts, generated_at_utc, code_version,
+  snapshot_dir
+- All fields verified compatible with Polymarket response structures
+- No modifications needed to snapshot infrastructure
+
+DEPENDENCIES:
+- No new dependencies needed for Polymarket read-only probe
+- urllib.request (stdlib) sufficient for HTTP
+- json (stdlib) sufficient for parsing
+- cryptography not needed (no auth required for Polymarket)
+
+TESTS:
+- External test suite: 66 passed, 1 skipped
+- Full suite: 165 passed, 1 skipped
+- Baseline comparison: IDENTICAL
+
+FROZEN FILES:
+- No frozen pipeline files touched
+- No frozen test files touched
+- HEAD unchanged: c0076ac
+
+FINDINGS SUMMARY:
+1. VERIFIED: Polymarket Gamma + CLOB are fully public, no auth needed
+2. VERIFIED: Gamma offset pagination works; CLOB cursor pagination works
+3. VERIFIED: CLOB /prices-history provides daily historical observations
+4. CRITICAL: startTs/endTs filtering always appends latest observation (leakage risk)
+5. SAFE WORKAROUND: fetch full max history, filter by t <= prediction_timestamp
+6. VERIFIED: Data API is for user-specific activity, NOT market discovery
+7. VERIFIED: Existing parser parse_polymarket_prices() correctly extracts t and p
+8. VERIFIED: Existing parser parse_polymarket_markets() extracts correct Gamma fields
+9. FINDING: parse_polymarket_markets() uses startDate/endDate but real API uses
+   startDate/endDateIso — INFERRED the dual naming but both exist on real objects
+10. VERIFIED: parse_polymarket_prices() only returns points with both t and p keys
+
+NOT PERFORMED:
+- No Polymarket data persisted to snapshots (validation snapshots were temp-deleted)
+- No Polymarket features integrated into forecasting model
+- No training/test methodology altered
+- No commits created
+
+--------------------------------------------------------------------------------
+20. POLYMARKET REAL-DATA VALIDATION (2026-08-26, uncommitted)
+--------------------------------------------------------------------------------
+An end-to-end real-data validation was performed to upgrade the temporal-safety
+finding from INFERRED to VERIFIED. Real API data was fetched, snapshotted,
+normalized, and temporally aligned using the EXISTING code. Temporary snapshot
+artifacts were cleaned up.
+
+MARKET TESTED:
+- Question: "Will Gavin Newsom win the 2028 Democratic presidential nomination?"
+- Gamma id: 559652
+- YES token_id: 54533043819946592547517511176940999955633860128497669742211153063842200957669
+- Token was selected from the readiness probe (section 19) as having 380 daily
+  observations spanning 2025-07-19 to 2026-08-26
+
+SNAPSHOT WRITTEN:
+- SnapshotWriter created an immutable directory under data/raw_external/_validation_tmp/
+- snapshot_prices_history() wrote prices_history.json + snapshot_manifest.json
+- SHA-256 verified: raw file hash matches manifest hash
+- Manifest contained all 9 required fields (source, endpoint, request_params,
+  http_status, raw_files, row_counts, generated_at_utc, code_version, snapshot_dir)
+- Snapshot was cleaned up after validation (temp artifact, not production)
+
+OBSERVATIONS RETRIEVED:
+- 380 daily price observations from CLOB /prices-history (interval=max, fidelity=1440)
+- First observation: t=1752883209 (2025-07-19T00:00:09Z), p=0.215
+- Last observation: t=1787733073 (2026-08-26T08:31:13Z), p=0.1435
+- parse_polymarket_prices() correctly extracted: token_id (empty), t_unix_s (int),
+  probability (float) for all 380 points
+- All probabilities in valid [0.0, 1.0] range
+
+PREDICTION TIMESTAMPS TESTED (6 total):
+1. T1: mid-series (2026-01-24) — 191 eligible, as-of pick t=1769212834
+2. T2: end of range (2026-08-26T08:31:13) — 380 eligible (all), as-of pick = last
+3. T3: one day before last (2026-08-25T08:31:13) — 378 eligible, appended latest excluded
+4. T4: exactly at first (2025-07-19T00:00:09) — 1 eligible, as-of pick = first
+5. T5: well before first (2025-06-19) — 0 eligible, as-of pick = None
+6. T6: 7 days ago (2026-08-19) — 372 eligible, appended latest excluded
+
+TEMPORAL-SAFETY PROOFS (ALL VERIFIED):
+For each prediction timestamp:
+- observation_timestamp <= prediction_timestamp: VERIFIED (assertion passed)
+- latest eligible observation was selected (prev < pick): VERIFIED
+- appended latest observation excluded when in future: VERIFIED
+- appended latest observation (t=1787733073) explicitly excluded at T3 (30 days
+  before last observation): VERIFIED
+- at T5 (before first observation), no observations eligible: VERIFIED
+
+DETERMINISM:
+- Two independent runs of parse_polymarket_prices() on identical input: 380 == 380 rows,
+  row-by-row comparison: IDENTICAL. VERIFIED.
+
+NO LEAKAGE:
+- Gamma current-state fields (outcomePrices, lastTradePrice, updatedAt, bestAsk,
+  bestBid) are NOT present in observation rows. VERIFIED.
+- Observations contain only: probability, t_unix_s, token_id. VERIFIED.
+
+FINDINGS (from real-data run):
+- parse_polymarket_prices() returns t_unix_s as int (not str) because it does
+  int(p.get("t", 0)). This is CORRECT — _parse_to_utc() handles int natively.
+- token_id is empty string in CLOB response observations because the raw response
+  only contains {history: [...]} without a top-level token_id. The caller must
+  supply the token_id externally if needed. NOT A DEFECT.
+- CLOB timestamps are not exactly at 00:00 UTC — they drift by seconds to minutes
+  (e.g., 00:00:09, 00:00:18, 08:31:13). This is expected from trade-settlement
+  timing. NOT A DEFECT.
+
+TESTS:
+- External suite: 66 passed, 1 skipped (IDENTICAL to baseline)
+- Full suite: 165 passed, 1 skipped (IDENTICAL to baseline)
+
+FROZEN FILES:
+- No frozen pipeline files touched
+- No frozen test files touched
+- HEAD unchanged: c0076ac
+
+NOT PERFORMED:
+- No Polymarket data integrated into forecasting dataset
+- No Feature Set V3 created
+- No V1/V2 modifications
+- No model retraining
+- No methodology changes
+- No commits created
+
+--------------------------------------------------------------------------------
+21. POLYMARKET INGESTION IMPLEMENTATION (2026-08-26, uncommitted)
+--------------------------------------------------------------------------------
+Polymarket ingestion was implemented following the existing external-data
+architecture (API → immutable snapshot → normalization → temporal alignment).
+No frozen V1/V2 files were modified. No Feature Set V3 was created. No commits.
+
+WHAT WAS IMPLEMENTED:
+
+1. run_polymarket_ingest() — backend/pipeline/external/fetch_polymarket.py
+   End-to-end ingestion orchestrator:
+   - Discovers markets via Gamma API (or accepts explicit market_ids)
+   - For each market: fetches YES token daily price history from CLOB
+     (interval=max, fidelity=1440 — the VERIFIED safe strategy)
+   - Writes immutable snapshots via SnapshotWriter (append-only, SHA-256)
+   - Normalizes with parse_polymarket_prices()
+   - Stamps token_id and market_id (CLOB response lacks these)
+   - Deduplicates across markets via (token_id, t_unix_s) keys
+   - Validates probability range [0.0, 1.0]
+   - Writes deterministic CSV + provenance report
+   Returns PolymarketIngestResult with summary metrics
+
+2. CLI ingest mode — backend/pipeline/external/run_external_ingest.py
+   Added --ingest flag (mutually exclusive with --probe):
+   --source polymarket --ingest
+   --source polymarket --ingest --market-ids 559652,559651
+   --source polymarket --ingest --closed --limit 10
+   Only Polymarket ingestion is currently wired; other sources print
+   "not yet implemented" if --ingest is used.
+
+3. Tests — tests/test_external_fetchers.py (3 new tests)
+   - test_ingest_produces_csv_and_report: end-to-end with fake transport,
+     verifies CSV content, provenance report, row counts, probability range
+   - test_ingest_deduplicates_across_markets: two markets with same
+     timestamp but different token_ids → no dedup (correct behavior)
+   - test_ingest_empty_gamma_returns_no_error: empty market list →
+     clean exit with zero rows
+
+ARCHITECTURE COMPLIANCE:
+- SnapshotWriter: immutable append-only directories, SHA-256 manifests — VERIFIED
+- No frozen pipeline files modified — VERIFIED
+- No V1/V2/targets/splits/modeling changes — VERIFIED
+- No Feature Set V3 created — VERIFIED
+- No commits created — VERIFIED
+
+TESTS:
+- External suite: 69 passed, 1 skipped (3 new tests)
+- Full suite: 168 passed, 1 skipped (3 new tests)
+- Baseline comparison: +3 tests, all pass, no regressions
+
+FILES MODIFIED:
+- backend/pipeline/external/fetch_polymarket.py (added run_polymarket_ingest,
+  PolymarketIngestResult, _discover_token_ids, _fetch_daily_history,
+  _POLYMARKET_DAILY_FIDELITY constant)
+- backend/pipeline/external/run_external_ingest.py (added --ingest mode,
+  _ingest_polymarket(), Polymarket-specific CLI args)
+- tests/test_external_fetchers.py (added 3 ingestion tests)
+
+FILES CREATED: None (all changes are to existing untracked files)
+FROZEN FILES TOUCHED: None
+GIT STATUS: HEAD unchanged (c0076ac)
+
+NOT PERFORMED:
+- No Polymarket data integrated into forecasting dataset
+- No Feature Set V3 created
+- No V1/V2 modifications
+- No model retraining
+- No methodology changes
+- No commits created
+
+--------------------------------------------------------------------------------
+22. WEEK 5 PHASE 1 - ELASTIC NET REGRESSION (2026-08-27, uncommitted)
+--------------------------------------------------------------------------------
+ElasticNetRegressor was added to the existing modeling layer and wired into
+the V2 experiment. No sklearn, no scipy, no new dependency. No frozen file
+touched. No commit created.
+
+IMPLEMENTATION:
+backend/modeling/regression.py - added ElasticNetRegressor alongside the
+unchanged RidgeRegressor. Same interface: fit(X, y) -> self, predict(X) ->
+list[float], to_dict() -> dict.
+
+OBJECTIVE (as specified for this phase):
+  minimize (1/(2n))*||y - Xw - b||^2
+          + alpha*l1_ratio*||w||_1
+          + alpha*(1-l1_ratio)/2*||w||^2
+Identical to sklearn's ElasticNet objective. b (intercept) is NEVER
+regularized.
+
+ALGORITHM: NumPy cyclic coordinate descent.
+- Design matrix and target are centered internally; intercept is recovered
+  as mean(y) - mean(X) @ w, exactly mirroring RidgeRegressor's convention.
+- Per-coordinate update: w_j = soft_threshold(B_j, alpha*l1_ratio) / A_j
+  where A_j = ||x_j||^2/n + alpha*(1-l1_ratio) and B_j = x_j^T r0 / n.
+- Soft-thresholding uses an explicit branch form (value > t, value < -t,
+  else 0.0) rather than sign(v)*max(|v|-t, 0) to avoid NaN from 0*inf and
+  to be exact in the ridge limit l1_ratio == 0.
+- Residual updated in place per coordinate (O(n) per coordinate).
+- Convergence: max absolute coefficient update over a full sweep <
+  tol * ||y - mean(y)||^2, capped by max_iter. n_iter_ and converged_ are
+  recorded. Default max_iter=1000, tol=1e-4.
+- Denominator floored at 1e-12 so an all-constant column with no L2 penalty
+  cannot divide by zero; the caller's alpha is never silently rewritten.
+- Degenerate limits verified: l1_ratio == 0 reproduces RidgeRegressor
+  exactly when alpha_enet = alpha_ridge/n; alpha == 0 is unregularized LS.
+- Deterministic: fixed coordinate order, no RNG, no shuffling. Two fits on
+  the same data are bit-identical.
+- Parameter validation at construction: alpha >= 0, 0 <= l1_ratio <= 1,
+  max_iter > 0, tol > 0. Invalid values raise ValueError before any fit.
+
+WIRING (backend/modeling/run_modeling.py):
+- DEFAULT_L1_RATIO_GRID = (0.1, 0.3, 0.5, 0.7, 0.9); alpha grid reuses the
+  existing DEFAULT_ALPHA_GRID.
+- Full cross product (5 x 5 = 25 cells) fit on the TRAIN-standardized
+  matrix, scored on VALIDATION only; argmin(validation MAE) refit on TRAIN;
+  TEST scored exactly once.
+- Report gains results["elastic_net"] and a protocol.elastic_net_selection
+  block recording the objective, solver, grids and the alpha-scale caveat.
+- CLI prints the selected (alpha, l1_ratio).
+
+HYPERPARAMETER GRID USED (as specified for this phase):
+  alpha     = [0.01, 0.1, 1, 10, 100]
+  l1_ratio  = [0.1, 0.3, 0.5, 0.7, 0.9]
+  criterion = validation MAE (lowest wins)
+
+TEST-SET ISOLATION: VERIFIED. The selection record contains only
+{alpha, l1_ratio, val_mae} per cell; the string "test" does not appear
+anywhere in it. The reported chosen cell equals argmin over val_mae.
+Enforced by a spy test asserting exactly 26 fits (25 grid + 1 refit) and
+that every captured design matrix equals an independently reconstructed
+TRAIN-standardized matrix.
+
+TESTS ADDED: tests/test_elastic_net.py - 40 tests. Covers fit/predict
+contract, predict-before-fit, shape guards, coefficient recovery on known
+synthetic signal, intercept-not-regularized, l1_ratio=0 ridge equivalence,
+lasso exact-zero limit, shrinkage vs alpha, monotone L1 norm, l1_ratio
+sparsity ordering, all parameter-validation branches, determinism, row-order
+invariance, grid-is-full-cross-product, argmin-is-argmin, no-test-in-
+selection, standardized-matrix spy, three-split scoring at return scale,
+weight serialization, protocol provenance, and a regression guard that
+ridge + baselines + preprocessing + rows are byte-identical with and
+without the elastic-net block.
+
+TESTS UPDATED (required by the new model appearing in results):
+- tests/test_modeling_v2.py: 2 expected-model-set assertions now include
+  "elastic_net".
+- tests/test_modeling.py: 1 expected-model-set assertion now includes
+  "elastic_net".
+No other existing test was weakened or removed.
+
+TEST SUITE: 195 passed / 1 skipped  ->  235 passed / 1 skipped (+40).
+Full run: `python -m pytest tests/ -q` => "235 passed, 1 skipped in 2.33s".
+
+V2 EXPERIMENT RESULT (actual, reproducible; data/processed/
+modeling_report_v2.json regenerated, methodology_version still 2):
+  rows train/val/test = 4580 / 1008 / 910; range 2000-10-16 .. 2026-08-19
+  SELECTED: alpha = 0.01, l1_ratio = 0.1   (validation MAE 0.0093530824)
+
+  model         split        MAE       RMSE        R2    DirAcc
+  zero_return   train    0.007924   0.011984  -0.0003   0.5354
+  zero_return   valid    0.009367   0.014432  -0.0013   0.5407
+  zero_return   test     0.006582   0.009372  -0.0074   0.5604
+  train_mean    train    0.007913   0.011982   0.0000   0.5354
+  train_mean    valid    0.009353   0.014426  -0.0005   0.5407
+  train_mean    test     0.006562   0.009357  -0.0041   0.5604
+  ridge(0.01)   train    0.007924   0.011895   0.0144   0.5140
+  ridge(0.01)   valid    0.009377   0.014496  -0.0102   0.5228
+  ridge(0.01)   test     0.006642   0.009382  -0.0096   0.5066
+  elastic_net   train    0.007913   0.011982   0.0000   0.5354
+  elastic_net   valid    0.009353   0.014426  -0.0005   0.5407
+  elastic_net   test     0.006562   0.009357  -0.0041   0.5604
+
+  Elastic Net headline: selected alpha 0.01, l1_ratio 0.1,
+  validation MAE 0.009353, test MAE 0.006562, test R2 -0.0041,
+  test directional accuracy 0.5604.
+
+COMPARISON TO BASELINES - READ THIS CAREFULLY, IT IS NOT A WIN:
+- On the raw numbers elastic_net beats ridge on validation MAE
+  (0.009353 < 0.009377) and on test MAE (0.006562 < 0.006642), and also
+  beats zero_return on both. It matches train_mean EXACTLY on all three
+  splits, to every printed digit.
+- REASON: the selected fit is DEGENERATE. Its 16 weights are all exactly
+  0.0 (max|w| = 0.0, sum|w| = 0.0), it converged in 1 iteration, and its
+  intercept 0.00020332123545851525 equals the train mean
+  0.00020332123545851528. Elastic Net collapsed into a constant predictor
+  that is arithmetically identical to TrainMeanBaseline.
+- So the apparent improvement is NOT learned signal. It is entirely the
+  fact that a nonzero constant beats a zero constant on MAE. No feature
+  information was used. This must NOT be reported as Elastic Net
+  "beating" Ridge.
+
+ROOT CAUSE (scale mismatch, quantified):
+- RidgeRegressor's objective is UNNORMALIZED: ||y-Xw-b||^2 + alpha*||w||^2.
+- Elastic Net's objective carries the 1/(2n) factor mandated for this phase.
+- Therefore ridge_alpha = n * enet_alpha. With n = 4580, enet_alpha 0.01 is
+  equivalent to ridge_alpha 45.8, which already over-shrinks. Every other
+  cell in the specified grid (0.1 ... 100) is equivalent to ridge_alpha
+  458 ... 458000, i.e. further into the flat/degenerate region.
+- The specified grid therefore cannot reach the weakly-regularized region
+  that Ridge occupies at alpha = 0.01. Its minimum cell is already past
+  the optimum. Verified numerically: enet(l1_ratio=0, alpha=0.5/n) matches
+  RidgeRegressor(alpha=0.5) to 8.9e-11 on a 400-row fixture.
+
+SUPPLEMENTARY DIAGNOSTIC (validation MAE only; NO test data touched; NOT a
+selection run and NOT written into any report):
+  enet_alpha  = ridge_alpha   l1=0.5      l1=0.1      l1=0.9
+  0.01            45.80     0.009353    0.009353    0.009353  DEGENERATE w=0
+  0.001            4.58     0.009337    0.009377    0.009348  non-degenerate
+  0.0001          0.458     0.009385    0.009382    0.009378
+  1e-05           0.046     0.009379    0.009377    0.009381
+  1e-06           0.005     0.009377    0.009377    0.009377
+  1e-07           0.000     0.009377    0.009377    0.009377
+  reference: zero_return 0.009367, train_mean 0.009353, ridge(0.01) 0.009377
+- The real elastic-net optimum sits near enet_alpha ~ 0.001, l1_ratio 0.5,
+  validation MAE ~ 0.009337, which is better than every other model tried
+  so far. The specified grid's floor of 0.01 sits inside the degenerate
+  plateau and can never select it.
+- This is a DIAGNOSTIC observation about grid scale. Correcting the grid
+  is a methodology change and was NOT made unilaterally.
+
+FILES CHANGED:
+- backend/modeling/regression.py            (modified: added
+                                              ElasticNetRegressor, _soft_threshold,
+                                              _MIN_DENOM; module docstring updated;
+                                              RidgeRegressor untouched)
+- backend/modeling/run_modeling.py          (modified: import, L1 grid,
+                                              l1_ratio_grid param, elastic-net
+                                              selection block, protocol block, CLI line)
+- tests/test_elastic_net.py                  (NEW, 40 tests)
+- tests/test_modeling_v2.py                 (modified: 2 assertions)
+- tests/test_modeling.py                    (modified: 1 assertion)
+- data/processed/modeling_report_v2.json    (regenerated: + elastic_net)
+
+VERIFICATION PERFORMED:
+- Ridge/baseline preservation: zero_return, train_mean and ridge result
+  records are BYTE-IDENTICAL before vs after (compared against a pre-change
+  copy of the report). rows, preprocessing stats and protocol.alpha_selection
+  also identical. The elastic-net block does not perturb existing models.
+- Test-set isolation: verified structurally (no test metric in the
+  selection record) and by the fit-spy test (26 fits, all on the
+  TRAIN-standardized matrix).
+- Determinism: two independent canonical runs are identical except
+  generated_at_utc.
+- Frozen files: git diff empty for all 9 frozen pipeline files, for
+  dataset.py / preprocessing.py / baselines.py / evaluation.py, for the 3
+  frozen test suites, and for data/raw.
+- No new dependency. requirements.txt untouched by this phase.
+
+KNOWN GAP / OPEN DECISION:
+- data/processed/modeling_report.json (the V1 report) was NOT regenerated in
+  this phase, so it does not yet contain an elastic_net entry while the V2
+  report does. V1 execution is unaffected (tests pass); only the stored V1
+  report is now stale relative to run(). Regenerating it was left out of
+  scope deliberately and flagged rather than done silently.
+- The alpha-grid scale mismatch is unresolved. Recommended follow-up, NOT
+  applied: either adopt an enet-specific grid around 1e-3 (e.g.
+  [1e-4, 1e-3, 1e-2]) or state the 1/(2n) normalization when comparing
+  grids. Any change requires explicit approval.
+
+NOT PERFORMED:
+- No sklearn / scipy / xgboost / lightgbm / torch added
+- No Feature Set V3; V1 and V2 feature contracts untouched
+- No change to split dates, target, or train-only scaling
+- No Polymarket or other external data in the forecasting dataset
+- No changes to canonical processed CSVs
+- No commits, no pushes, no branches created
+- HEAD still c0076ac
+
+================================================================================
+
+================================================================================
+SECTION 23 - METHODOLOGICAL AUDIT SUBTASK: ELASTIC NET CONVERGENCE HARDENING
+================================================================================
+
+SCOPE
+- Hardening only. Objective, hyperparameter grids, feature contracts, split
+  dates, target, train-only scaling and canonical reports all unchanged.
+- Files touched by this subtask:
+    backend/modeling/regression.py   (convergence criterion only)
+    tests/test_elastic_net.py        (7 new tests)
+    context.txt                      (this section)
+- No final test-set evaluation was run. No canonical report regenerated.
+
+--------------------------------------------------------------------------------
+1. THE DEFECT
+--------------------------------------------------------------------------------
+The Elastic Net coordinate-descent loop stopped on
+
+    max_update < tol * ||y - mean(y)||**2
+
+The two sides do not carry the same units. `max_update` is a change in a
+coefficient and scales like y (factor c under y -> c*y). The right-hand side
+is a squared target norm and scales like y**2 (factor c**2). Effective
+strictness therefore moved with the arbitrary numerical magnitude of the
+target: the same problem was solved strictly at one scale and loosely at
+another. The previous comment described this rule as "scale-free", which was
+incorrect.
+
+--------------------------------------------------------------------------------
+2. HOW IT WAS FOUND
+--------------------------------------------------------------------------------
+A synthetic fixture with a large-magnitude target (y ~ O(10), roughly 200x
+the V2 return scale) and weak regularization converged after TWO sweeps while
+still being ~0.37 away from the coefficients obtained from the closed-form
+Ridge solution.
+
+--------------------------------------------------------------------------------
+3. THE FIX
+--------------------------------------------------------------------------------
+    if max_update <= self.tol * float(np.abs(w).max()):
+
+Purely relative to the fitted weights. Both sides now scale by |c| under
+y -> c*y, so the comparison is exactly invariant and `tol` keeps one fixed
+meaning at every target magnitude. Also `converged_` / `n_iter_` still expose
+the max_iter cap honestly.
+
+Three deliberate choices:
+
+(a) `<=` rather than `<`. A fully shrunk model has max|w| == 0 and an exactly
+    zero update, so the test is 0 <= 0 and must read as converged. With `<`
+    every degenerate all-zero model would burn all max_iter sweeps. This is
+    not hypothetical: all 25 canonical V2 cells are degenerate and converge
+    in 1 sweep under `<=`.
+
+(b) NOT max(1, max|w|), which was considered and rejected. The largest V2
+    weight is ~5e-4, so the constant 1 dominates and yields a threshold of
+    tol*1 = 1e-4 -- about 2x LOOSER than the superseded rule at V2 scale.
+    Any fixed constant reintroduces exactly the arbitrary scale this fix
+    removes. Measured on V2: max|w| = 4.88e-4, giving thresholds of 1.00e-4
+    (suggested form) vs 4.88e-8 (relative form), a factor of ~1347 apart.
+
+(c) The objective, the soft-threshold update, the residual recycling, the
+    parameter surface and the defaults (tol=1e-4, max_iter=1000) are all
+    untouched.
+
+--------------------------------------------------------------------------------
+4. SYNTHETIC VERIFICATION
+--------------------------------------------------------------------------------
+Well-conditioned fixture (cond(X) = 1.2, std(y) = 2.32), l1_ratio = 0,
+alpha_enet = alpha_ridge / n, production tol = 1e-4:
+
+    alpha_ridge    max|dw| vs Ridge    sweeps    converged
+       0.001              5.57e-07           4        True
+       0.01               5.57e-07           4        True
+       0.1                5.56e-07           4        True
+       1.0                5.48e-07           4        True
+       10.0               4.76e-07           4        True
+
+Intercept agreement to 8.6e-07. The same fixture under the old rule stopped
+at 2 sweeps with ~5.0e-04 error.
+
+The reference was independently corroborated: RidgeRegressor matches an
+augmented-system `numpy.linalg.lstsq` solution to 1.9e-11 even at
+alpha_ridge = 0.001, so the reference is trustworthy and not the weak link.
+
+Scale sweep, alpha fixed, c from 1e-6 to 1e6: max|w| scaled exactly as c**1
+(1.5353e-03, 1.9986, 1.9991e+03, 1.9991e+06) with sweeps pinned at 3-4.
+Under the old rule the sweep count for one fixed problem ranged [4, 3, 2, 1,
+1] across scales 1e-4 -> 1e4, which is the defect made visible.
+
+--------------------------------------------------------------------------------
+5. TESTS ADDED (7)
+--------------------------------------------------------------------------------
+All in tests/test_elastic_net.py:
+  test_large_magnitude_target_does_not_falsely_converge
+  test_weak_regularization_on_large_target_agrees_with_ridge_across_alphas
+  test_convergence_is_independent_of_target_magnitude
+  test_convergence_behaviour_survives_tiny_and_huge_targets
+  test_scaled_target_keeps_weights_on_the_expected_linear_scaling
+  test_all_zero_fixed_point_still_converges_immediately
+  test_non_convergence_is_reported_honestly
+
+Confirmed as genuine regression cover: with the old criterion temporarily
+restored, 4 of the 7 FAIL (converged in 2 sweeps at 4.97e-04 error; sweep
+counts [4, 3, 2, 1, 1]; scaled-target error 3.74). With the fix, all 47 pass.
+
+The elastic-net objective is NOT scale invariant, because the penalty is
+absolute. Coefficients are not required to scale proportionally with y in
+general; they do in the penalty-negligible regime, and that is the only case
+asserted.
+
+--------------------------------------------------------------------------------
+6. HONEST LIMITATION - STILL OPEN
+--------------------------------------------------------------------------------
+Cyclic coordinate descent is slow on ill-conditioned, weakly regularized
+designs. On a cond(X) = 1.11e+03 fixture with a QR-rotated loading and
+alpha_ridge in {0.001, 0.01, 0.1}, the solver reaches max_iter=1000 and
+reports converged_ = False, and the objective at the CD iterate is HIGHER
+than at the Ridge solution. This is a solver limitation, not a criterion
+defect, and it is now surfaced honestly rather than masked.
+
+Notably, a two-part criterion (relative update AND relative objective change)
+was implemented and measured as a possible remedy. It made no meaningful
+difference (alpha_ridge = 0.001 still stopped early at err 2.47e-01 vs
+2.52e-01), so the simpler single relative-update rule was kept. It was
+rejected on evidence rather than adopted for its own sake.
+
+Practical impact on the current pipeline is nil: all 25 canonical V2 cells are
+degenerate and converge in 1 sweep.
+
+--------------------------------------------------------------------------------
+7. TEST RESULTS
+--------------------------------------------------------------------------------
+  tests/test_elastic_net.py                    47 passed   (40 -> 47)
+  tests/test_modeling.py + test_modeling_v2.py 29 passed
+  full suite                                   242 passed, 1 skipped
+                                              (was 235 passed, 1 skipped)
+
+--------------------------------------------------------------------------------
+8. CANONICAL V2 RESULT UNCHANGED
+--------------------------------------------------------------------------------
+Re-running the canonical 5x5 grid, validation only, under the new criterion:
+all 25 cells converged in 1 sweep, selection is still
+alpha = 0.01, l1_ratio = 0.1, val_mae = 0.009353 -- identical to the Phase 1
+canonical result. data/processed/modeling_report_v2.json was NOT regenerated
+and no test split was evaluated.
+
+NOT PERFORMED
+- No change to DEFAULT_ALPHA_GRID or DEFAULT_L1_RATIO_GRID
+- No test-set evaluation; no canonical report regeneration
+- No change to frozen pipeline / dataset / preprocessing / baselines /
+  evaluation files (verified: empty diffs)
+- No new dependency
+- No commits, no pushes; HEAD still c0076ac

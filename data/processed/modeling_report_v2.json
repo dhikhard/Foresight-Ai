@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-08-23T18:44:18.379069+00:00",
+  "generated_at_utc": "2026-09-28T04:16:53.913482+00:00",
   "feature_set": "v2",
   "target": "target_return_1d",
   "feature_columns": [
@@ -39,6 +39,26 @@
         10.0,
         100.0
       ]
+    },
+    "elastic_net_selection": {
+      "criterion": "validation MAE",
+      "alpha_grid": [
+        0.01,
+        0.1,
+        1.0,
+        10.0,
+        100.0
+      ],
+      "l1_ratio_grid": [
+        0.1,
+        0.3,
+        0.5,
+        0.7,
+        0.9
+      ],
+      "objective": "(1/(2n))*||y-Xw-b||^2 + alpha*l1_ratio*||w||_1 + alpha*(1-l1_ratio)/2*||w||^2",
+      "solver": "numpy cyclic coordinate descent, intercept unregularized",
+      "alpha_scale_note": "elastic net's 1/(2n) objective scaling puts its alpha grid on a different numerical scale from ridge's unnormalized alpha grid; the two grids are therefore not directly comparable"
     },
     "test_discipline": "TEST scored once as holdout after all decisions are frozen; never used for model, feature-set, or hyperparameter choices",
     "feature_set_winner_rule": "lower validation ridge MAE between v1 and v2 wins; test metrics do not change the winner",
@@ -264,6 +284,217 @@
           "mean_actual_return": 0.000804422292967033,
           "mean_predicted_return": 9.838805712450887e-05,
           "prediction_std": 0.001009827130327475
+        }
+      ]
+    },
+    "elastic_net": {
+      "model": "elastic_net",
+      "selection": {
+        "method": "validation MAE",
+        "alpha_grid": [
+          0.01,
+          0.1,
+          1.0,
+          10.0,
+          100.0
+        ],
+        "l1_ratio_grid": [
+          0.1,
+          0.3,
+          0.5,
+          0.7,
+          0.9
+        ],
+        "scores": [
+          {
+            "alpha": 0.01,
+            "l1_ratio": 0.1,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.01,
+            "l1_ratio": 0.3,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.01,
+            "l1_ratio": 0.5,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.01,
+            "l1_ratio": 0.7,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.01,
+            "l1_ratio": 0.9,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.1,
+            "l1_ratio": 0.1,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.1,
+            "l1_ratio": 0.3,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.1,
+            "l1_ratio": 0.5,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.1,
+            "l1_ratio": 0.7,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 0.1,
+            "l1_ratio": 0.9,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 1.0,
+            "l1_ratio": 0.1,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 1.0,
+            "l1_ratio": 0.3,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 1.0,
+            "l1_ratio": 0.5,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 1.0,
+            "l1_ratio": 0.7,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 1.0,
+            "l1_ratio": 0.9,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 10.0,
+            "l1_ratio": 0.1,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 10.0,
+            "l1_ratio": 0.3,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 10.0,
+            "l1_ratio": 0.5,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 10.0,
+            "l1_ratio": 0.7,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 10.0,
+            "l1_ratio": 0.9,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 100.0,
+            "l1_ratio": 0.1,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 100.0,
+            "l1_ratio": 0.3,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 100.0,
+            "l1_ratio": 0.5,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 100.0,
+            "l1_ratio": 0.7,
+            "val_mae": 0.009353082403176161
+          },
+          {
+            "alpha": 100.0,
+            "l1_ratio": 0.9,
+            "val_mae": 0.009353082403176161
+          }
+        ],
+        "chosen_alpha": 0.01,
+        "chosen_l1_ratio": 0.1
+      },
+      "weights": {
+        "alpha": 0.01,
+        "l1_ratio": 0.1,
+        "max_iter": 1000,
+        "tol": 0.0001,
+        "weights": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "intercept": 0.00020332123545851525,
+        "n_iter": 1,
+        "converged": true
+      },
+      "splits": [
+        {
+          "split": "train",
+          "n": 4580,
+          "mae": 0.007913100328544496,
+          "rmse": 0.01198229489141547,
+          "r2": 0.0,
+          "directional_accuracy": 0.5353711790393013,
+          "mean_actual_return": 0.00020332123545851528,
+          "mean_predicted_return": 0.00020332123545851525,
+          "prediction_std": 0.0
+        },
+        {
+          "split": "validation",
+          "n": 1008,
+          "mae": 0.009353082403176161,
+          "rmse": 0.014426128915409136,
+          "r2": -0.0004894851815615553,
+          "directional_accuracy": 0.5406746031746031,
+          "mean_actual_return": 0.0005224113271825397,
+          "mean_predicted_return": 0.00020332123545851525,
+          "prediction_std": 0.0
+        },
+        {
+          "split": "test",
+          "n": 910,
+          "mae": 0.006561529532047604,
+          "rmse": 0.009356565510270752,
+          "r2": -0.0041443670776388775,
+          "directional_accuracy": 0.5604395604395604,
+          "mean_actual_return": 0.000804422292967033,
+          "mean_predicted_return": 0.00020332123545851525,
+          "prediction_std": 0.0
         }
       ]
     }

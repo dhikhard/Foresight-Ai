@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ForeSightAI — Explainable Probabilistic Forecasting & Decision Support</title>
+  
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            navy: {
+              950: '#060a12',
+              900: '#090e1a',
+              850: '#0d1527',
+              800: '#111c35',
+              700: '#1b2a4e',
+              600: '#263b6d',
+            },
+            cyan: {
+              400: '#22d3ee',
+              500: '#06b6d4',
+              600: '#0891b2',
+            },
+            sky: {
+              400: '#38bdf8',
+              500: '#0ea5e9',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Chart.js via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body class="bg-navy-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- TOP HEADER -->
+  <header class="h-16 border-b border-navy-800 bg-navy-900/90 backdrop-blur sticky top-0 z-50 flex items-center justify-between px-6">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+        <i data-lucide="line-chart" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-lg tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-cyan-400">
+            FORESIGHT<span class="text-cyan-400 font-mono">.AI</span>
+          </span>
+          <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-800 text-cyan-300">
+            Phase 1 Engine
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400 hidden sm:block">Explainable Probabilistic Forecasting & Risk-Aware Decision Support</p>
+      </div>
+    </div>
+
+    <!-- Right Header Controls -->
+    <div class="flex items-center gap-4">
+      <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-navy-850 border border-navy-700 text-xs">
+        <span class="pulse-dot"></span>
+        <span class="text-slate-300 font-mono" id="header-data-date">S&P 500: Aug 20, 2026</span>
+        <span class="text-slate-500">|</span>
+        <span class="text-emerald-400 font-mono font-medium" id="header-sp500-price">$7,641.16</span>
+        <span class="text-rose-400 font-mono text-[11px]" id="header-sp500-delta">(-0.87%)</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <select id="feature-set-selector" class="bg-navy-850 text-slate-200 border border-navy-700 rounded-lg text-xs px-2.5 py-1.5 font-mono focus:outline-none focus:border-cyan-500">
+          <option value="v2" selected>Feature Set V2 (16 Stationary)</option>
+          <option value="v1">Feature Set V1 (10 Technical)</option>
+        </select>
+        <button id="refresh-btn" title="Reload pipeline data" class="p-1.5 rounded-lg bg-navy-850 hover:bg-navy-700 text-slate-300 border border-navy-700 transition">
+          <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN APPLICATION LAYOUT -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="w-64 border-r border-navy-800 bg-navy-900/60 p-4 flex flex-col justify-between shrink-0">
+      <div class="space-y-6">
+        <div>
+          <p class="text-[10px] font-mono uppercase tracking-wider text-slate-400 px-3 mb-2">Modules</p>
+          <nav class="space-y-1">
+            <button data-tab="market-overview" class="nav-tab active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left font-medium">
+              <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+              <span>Market Overview</span>
+            </button>
+            <button data-tab="forecasting-engine" class="nav-tab w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left font-medium text-slate-300">
+              <i data-lucide="cpu" class="w-4 h-4"></i>
+              <span>Forecasting Engine</span>
+            </button>
+            <button data-tab="model-performance" class="nav-tab w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left font-medium text-slate-300">
+              <i data-lucide="activity" class="w-4 h-4"></i>
+              <span>Model Performance</span>
+            </button>
+            <button data-tab="risk-analysis" class="nav-tab w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left font-medium text-slate-300">
+              <i data-lucide="shield-alert" class="w-4 h-4"></i>
+              <span>Risk Analysis</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- Academic Provenance Card -->
+        <div class="glass-panel p-3.5 text-xs space-y-2 border-navy-700/80">
+          <div class="flex items-center justify-between text-slate-400 font-mono text-[10px]">
+            <span>AUDIT PROTOCOL</span>
+            <span class="text-cyan-400">LEAKAGE-SAFE</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            Strict chronological splitting (<span class="text-slate-200">Train &lt;2019</span>, <span class="text-slate-200">Val 2019-22</span>, <span class="text-slate-200">Test &ge;2023</span>). Train-only standardization.
+          </p>
+          <div class="pt-1 border-t border-navy-700/60 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+            <span>Model Selection:</span>
+            <span class="text-amber-400">Val MAE Only</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="pt-4 border-t border-navy-800 text-[11px] text-slate-400 space-y-1">
+        <div class="flex items-center justify-between">
+          <span>Engine Status</span>
+          <span class="text-emerald-400 font-mono">LIVE / READY</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>Symbol</span>
+          <span class="font-mono text-slate-300">^GSPC (S&P 500)</span>
+        </div>
+        <p class="text-[10px] text-slate-400 pt-2">ForeSightAI v1.0 • College Demo</p>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="flex-1 overflow-y-auto p-6 bg-navy-950/70" id="main-content">
+
+      <!-- =================================================================== -->
+      <!-- TAB 1: MARKET OVERVIEW -->
+      <!-- =================================================================== -->
+      <section id="tab-market-overview" class="tab-content active space-y-6">
+        
+        <!-- Page Title & Freshness Banner -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-navy-800">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+              <span>S&P 500 Market Overview</span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-950 border border-blue-800 text-blue-300 font-normal">
+                Deterministic Historical Series
+              </span>
+            </h1>
+            <p class="text-sm text-slate-400 mt-0.5">
+              Historical market data, rolling moving averages, volatility regime, and technical indicators.
+            </p>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="glass-panel px-3 py-1.5 flex items-center gap-2 text-xs">
+              <i data-lucide="database" class="w-4 h-4 text-cyan-400"></i>
+              <span class="text-slate-400">Data Freshness:</span>
+              <span class="text-slate-200 font-mono font-medium" id="overview-freshness-text">6,698 days through 2026-08-20</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- KPI 1: Latest Close -->
+          <div class="glass-panel p-4 kpi-card">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span>LATEST OBSERVATION</span>
+              <span class="font-mono text-[10px] text-cyan-400" id="kpi-obs-date">2026-08-20</span>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-2xl font-bold font-mono-num text-white" id="kpi-close-price">$7,641.16</span>
+              <span class="text-xs font-mono font-medium px-1.5 py-0.5 rounded" id="kpi-return-badge">-0.87%</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-2 flex items-center justify-between">
+              <span>Day Range:</span>
+              <span class="font-mono-num text-slate-300" id="kpi-day-range">$7,639.01 - $7,699.96</span>
+            </div>
+          </div>
+
+          <!-- KPI 2: Volatility Indicators -->
+          <div class="glass-panel p-4 kpi-card">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span>ANNUALIZED VOLATILITY</span>
+              <span class="font-mono text-[10px] text-blue-400">20D / 60D</span>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-2xl font-bold font-mono-num text-white" id="kpi-vol-20">13.1%</span>
+              <span class="text-xs text-slate-400">/ <span id="kpi-vol-60" class="font-mono-num">13.7%</span></span>
+            </div>
+            <div class="text-xs text-slate-400 mt-2 flex items-center justify-between">
+              <span>Vol Ratio (20/60):</span>
+              <span class="font-mono-num text-slate-300" id="kpi-vol-ratio">0.96 (Normal)</span>
+            </div>
+          </div>
+
+          <!-- KPI 3: Drawdown from Peak -->
+          <div class="glass-panel p-4 kpi-card">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span>DRAWDOWN FROM ATH</span>
+              <span class="font-mono text-[10px] text-emerald-400" id="kpi-ath-level">Peak: $7,806.60</span>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-2xl font-bold font-mono-num text-amber-400" id="kpi-drawdown">-2.11%</span>
+              <span class="text-xs text-slate-400">off peak</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-2 flex items-center justify-between">
+              <span>Max Historical Drop:</span>
+              <span class="font-mono-num text-rose-400" id="kpi-max-drawdown">-56.8% (2008 GFC)</span>
+            </div>
+          </div>
+
+          <!-- KPI 4: 52-Week Range & Volume -->
+          <div class="glass-panel p-4 kpi-card">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span>52-WEEK RANGE</span>
+              <span class="font-mono text-[10px] text-slate-300" id="kpi-volume">Vol: 4.76B</span>
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-lg font-bold font-mono-num text-white" id="kpi-52w-high">$7,810.01</span>
+              <span class="text-xs text-slate-400">/ <span id="kpi-52w-low" class="font-mono-num">$5,119.26</span></span>
+            </div>
+            <div class="w-full bg-navy-800 rounded-full h-1.5 mt-2.5 overflow-hidden">
+              <div id="kpi-52w-bar" class="bg-cyan-500 h-1.5 rounded-full" style="width: 92%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive S&P 500 Historical Price Chart Panel -->
+        <div class="glass-panel p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                <span>S&P 500 Historical Price & Moving Averages</span>
+              </h2>
+              <p class="text-xs text-slate-400">Interactive timeseries with backward-looking SMA 20, 50, and 200 overlays</p>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex flex-wrap items-center gap-3">
+              <!-- Indicators Toggle -->
+              <div class="flex items-center gap-3 text-xs text-slate-300 border-r border-navy-700 pr-3">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="toggle-sma20" checked class="rounded border-navy-700 text-cyan-500 focus:ring-0">
+                  <span class="text-cyan-400 font-mono text-[11px]">SMA 20</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="toggle-sma50" checked class="rounded border-navy-700 text-amber-500 focus:ring-0">
+                  <span class="text-amber-400 font-mono text-[11px]">SMA 50</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="toggle-sma200" checked class="rounded border-navy-700 text-purple-500 focus:ring-0">
+                  <span class="text-purple-400 font-mono text-[11px]">SMA 200</span>
+                </label>
+              </div>
+
+              <!-- Horizon Selectors -->
+              <div class="flex items-center gap-1 bg-navy-850 p-1 rounded-lg border border-navy-700 text-xs">
+                <button data-range="1Y" class="chart-range-btn px-2.5 py-1 rounded text-slate-300 hover:text-white transition">1Y</button>
+                <button data-range="3Y" class="chart-range-btn px-2.5 py-1 rounded text-slate-300 hover:text-white transition">3Y</button>
+                <button data-range="5Y" class="chart-range-btn px-2.5 py-1 rounded text-slate-300 hover:text-white transition">5Y</button>
+                <button data-range="ALL" class="chart-range-btn active px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-300 font-medium transition">All</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chart Canvas Container -->
+          <div class="h-80 w-full relative">
+            <canvas id="marketOverviewChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Feature Overview Table -->
+        <div class="glass-panel p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                <span>V2 Stationary Feature Overview</span>
+                <span class="text-xs font-mono text-cyan-400 px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800">
+                  Observation: 2026-08-20
+                </span>
+              </h2>
+              <p class="text-xs text-slate-400">Scale-free stationary features computed strictly backward-looking from clean OHLCV data.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400">Filter:</span>
+              <select id="feature-category-filter" class="bg-navy-850 text-slate-200 border border-navy-700 rounded text-xs px-2 py-1 font-mono">
+                <option value="all">All Categories</option>
+                <option value="Momentum / Lags">Return Lags</option>
+                <option value="Trend">Momentum</option>
+                <option value="Mean Reversion">MA Distance</option>
+                <option value="Volatility">Volatility Dynamics</option>
+                <option value="Oscillator">Oscillators (RSI / %B)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs finance-table">
+              <thead class="bg-navy-850/80 text-slate-400 uppercase font-mono text-[10px] border-b border-navy-700">
+                <tr>
+                  <th class="py-2.5 px-3">Feature Name</th>
+                  <th class="py-2.5 px-3">Category</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Value (Latest)</th>
+                  <th class="py-2.5 px-3">Mathematical Formulation & Interpretation</th>
+                  <th class="py-2.5 px-3 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody id="features-table-body" class="divide-y divide-navy-800 font-sans">
+                <!-- Dynamically populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- TAB 2: FORECASTING ENGINE -->
+      <!-- =================================================================== -->
+      <section id="tab-forecasting-engine" class="tab-content space-y-6">
+
+        <!-- Title & Disclaimer -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-navy-800">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+              <span>Next-Day Return Forecasting Engine</span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-800 text-emerald-300 font-normal">
+                Out-of-Sample Inference
+              </span>
+            </h1>
+            <p class="text-sm text-slate-400 mt-0.5">
+              Evaluating trained closed-form Ridge and coordinate-descent Elastic Net models on the latest observation.
+            </p>
+          </div>
+          <div class="glass-panel px-3 py-1.5 flex items-center gap-2 text-xs">
+            <i data-lucide="calendar" class="w-4 h-4 text-cyan-400"></i>
+            <span class="text-slate-400">Target Horizon:</span>
+            <span class="text-cyan-300 font-mono font-medium">1 Trading Day Forward (Close t+1)</span>
+          </div>
+        </div>
+
+        <!-- Prominent Scientific Disclaimer Banner -->
+        <div class="p-4 rounded-xl bg-amber-950/40 border border-amber-800/80 text-amber-200/90 text-xs flex gap-3.5 items-start leading-relaxed shadow-lg">
+          <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400 shrink-0 mt-0.5"></i>
+          <div>
+            <h4 class="font-semibold text-amber-300 text-sm mb-1">Scientific Integrity & Academic Disclosure</h4>
+            <p>
+              Daily stock market index returns exhibit near-zero linear autocorrelation and behave close to a Martingale difference sequence (random walk). 
+              In rigorous out-of-sample evaluation on held-out test data (2023–2026), <strong>no model outperforms the constant Train-Mean baseline</strong> (Ridge Test R² = -0.0095; Train Mean Test R² = -0.0041). 
+              The figures displayed below represent authentic, deterministic model calculations for quantitative presentation and methodology evaluation. 
+              <strong>They do not represent reliable investment predictions.</strong>
+            </p>
+          </div>
+        </div>
+
+        <!-- Primary Forecast Cards Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          
+          <!-- Card 1: Ridge Model (Primary) -->
+          <div class="glass-panel p-5 kpi-card border-cyan-500/50 relative">
+            <div class="flex items-center justify-between text-xs text-cyan-400 mb-1">
+              <span class="font-semibold tracking-wider uppercase">Ridge Regressor</span>
+              <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800">α = 0.01</span>
+            </div>
+            <div class="mt-2">
+              <span class="text-3xl font-bold font-mono-num text-white" id="forecast-ridge-return">+0.123%</span>
+              <p class="text-xs text-slate-400 mt-1">Predicted Next-Day Return</p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-navy-700/80 flex items-center justify-between text-xs">
+              <span class="text-slate-400">Implied Index Close:</span>
+              <span class="font-mono-num font-bold text-cyan-300 text-sm" id="forecast-ridge-price">$7,650.58</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-2">
+              Validation-selected L2 regularized model with standardized V2 feature inputs.
+            </p>
+          </div>
+
+          <!-- Card 2: Train Mean Baseline -->
+          <div class="glass-panel p-5 kpi-card">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span class="font-semibold tracking-wider uppercase">Train-Mean Baseline</span>
+              <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-navy-800">Fixed Rule</span>
+            </div>
+            <div class="mt-2">
+              <span class="text-3xl font-bold font-mono-num text-slate-200" id="forecast-mean-return">+0.020%</span>
+              <p class="text-xs text-slate-400 mt-1">Historical Train Target Mean</p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-navy-700/80 flex items-center justify-between text-xs">
+              <span class="text-slate-400">Implied Index Close:</span>
+              <span class="font-mono-num font-bold text-slate-200 text-sm" id="forecast-mean-price">$7,642.71</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-2">
+              The benchmark to beat. Predicts constant mean target of 2000–2018 training split.
+            </p>
+          </div>
+
+          <!-- Card 3: Elastic Net -->
+          <div class="glass-panel p-5 kpi-card">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span class="font-semibold tracking-wider uppercase">Elastic Net</span>
+              <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-navy-800">α = 0.01, ρ = 0.1</span>
+            </div>
+            <div class="mt-2">
+              <span class="text-3xl font-bold font-mono-num text-slate-200" id="forecast-enet-return">+0.020%</span>
+              <p class="text-xs text-slate-400 mt-1">Coordinate Descent Model</p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-navy-700/80 flex items-center justify-between text-xs">
+              <span class="text-slate-400">Implied Index Close:</span>
+              <span class="font-mono-num font-bold text-slate-200 text-sm" id="forecast-enet-price">$7,642.71</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-2">
+              Degenerate under canonical grid: L1 penalty shrank all 16 weights to 0. Identical to Train-Mean.
+            </p>
+          </div>
+
+          <!-- Card 4: Zero Return Baseline -->
+          <div class="glass-panel p-5 kpi-card">
+            <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+              <span class="font-semibold tracking-wider uppercase">Zero Return (Null)</span>
+              <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-navy-800">Fixed Rule</span>
+            </div>
+            <div class="mt-2">
+              <span class="text-3xl font-bold font-mono-num text-slate-200">0.000%</span>
+              <p class="text-xs text-slate-400 mt-1">Martingale Null Model</p>
+            </div>
+            <div class="mt-4 pt-3 border-t border-navy-700/80 flex items-center justify-between text-xs">
+              <span class="text-slate-400">Implied Index Close:</span>
+              <span class="font-mono-num font-bold text-slate-200 text-sm" id="forecast-zero-price">$7,641.16</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-2">
+              Null hypothesis: tomorrow's closing price equals today's observed close.
+            </p>
+          </div>
+
+        </div>
+
+        <!-- Comparative Chart & Ridge Feature Attribution Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- Left: Model Comparison Chart -->
+          <div class="glass-panel p-5 space-y-4">
+            <div>
+              <h3 class="text-base font-semibold text-white">Forecast Model Comparison</h3>
+              <p class="text-xs text-slate-400">Predicted percentage return vs. baseline benchmarks</p>
+            </div>
+            <div class="h-64 relative">
+              <canvas id="forecastComparisonChart"></canvas>
+            </div>
+            <div class="text-xs text-slate-400 bg-navy-900/60 p-3 rounded-lg border border-navy-800">
+              <div class="flex items-center justify-between">
+                <span>Baseline Observation Close:</span>
+                <span class="font-mono-num text-white font-medium" id="forecast-base-price">$7,641.16</span>
+              </div>
+              <div class="flex items-center justify-between mt-1">
+                <span>Ridge vs. Train-Mean Differential:</span>
+                <span class="font-mono-num text-cyan-400 font-medium" id="forecast-ridge-diff">+0.103% (+$7.87)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Ridge Feature Contributions (Explainability) -->
+          <div class="glass-panel p-5 space-y-4">
+            <div>
+              <h3 class="text-base font-semibold text-white flex items-center gap-2">
+                <span>Explainability: Ridge Feature Attribution</span>
+                <span class="text-xs font-mono text-cyan-400">w_j * x_j</span>
+              </h3>
+              <p class="text-xs text-slate-400">Top positive and negative contributors to the next-day return prediction</p>
+            </div>
+            <div class="h-64 relative">
+              <canvas id="ridgeAttributionChart"></canvas>
+            </div>
+            <p class="text-[11px] text-slate-400">
+              Contributions are calculated as the product of the trained Ridge regression weight and the standardized feature value for the latest observation.
+            </p>
+          </div>
+
+        </div>
+
+        <!-- Mathematical Deep Dive Accordion -->
+        <div class="glass-panel p-5 space-y-3">
+          <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4 text-cyan-400"></i>
+            <span>Model Formulation & Optimization Details</span>
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300">
+            <div class="bg-navy-900/60 p-3.5 rounded-lg border border-navy-800 space-y-1.5">
+              <p class="font-semibold text-cyan-300 font-mono">1. Closed-Form Ridge Objective:</p>
+              <p class="font-mono text-slate-400">min ||y - Xw - b||² + α * ||w||²</p>
+              <p class="text-slate-400">
+                Solved via normal equations on internally centered data: <code>w = (X_c^T X_c + αI)⁻¹ X_c^T y_c</code>.
+                Validation MAE selected optimal <strong>α = 0.01</strong>.
+              </p>
+            </div>
+            <div class="bg-navy-900/60 p-3.5 rounded-lg border border-navy-800 space-y-1.5">
+              <p class="font-semibold text-cyan-300 font-mono">2. NumPy Coordinate Descent Elastic Net:</p>
+              <p class="font-mono text-slate-400">min (1/2n)*||y - Xw - b||² + α*ρ*||w||₁ + α*(1-ρ)/2*||w||²</p>
+              <p class="text-slate-400">
+                Cyclic coordinate descent with soft-thresholding. With objective scaling <code>1/(2n)</code>, α=0.01 imposed an L1 penalty exceeding return cross-correlations, shrinking all weights to 0.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- TAB 3: MODEL PERFORMANCE -->
+      <!-- =================================================================== -->
+      <section id="tab-model-performance" class="tab-content space-y-6">
+
+        <!-- Title -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-navy-800">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+              <span>Model Evaluation & Out-of-Sample Performance</span>
+            </h1>
+            <p class="text-sm text-slate-400 mt-0.5">
+              Rigorous performance comparison across Train, Validation, and Holdout Test sets.
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs px-3 py-1 rounded-full bg-navy-800 border border-navy-700 text-slate-300 font-mono">
+              Test Set: 910 Observations (2023–2026)
+            </span>
+          </div>
+        </div>
+
+        <!-- Chronological Split Boundaries Banner -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="glass-panel p-3.5 border-l-4 border-blue-500">
+            <div class="text-[11px] font-mono text-blue-400 uppercase">Split 1: Training Period</div>
+            <div class="text-sm font-bold text-white mt-1">2000-10-16 &rarr; 2018-12-31</div>
+            <div class="text-xs text-slate-400 mt-1 flex justify-between">
+              <span>Rows: <strong>4,580</strong></span>
+              <span>Preprocessing Fit Here</span>
+            </div>
+          </div>
+          <div class="glass-panel p-3.5 border-l-4 border-amber-500">
+            <div class="text-[11px] font-mono text-amber-400 uppercase">Split 2: Validation Period</div>
+            <div class="text-sm font-bold text-white mt-1">2019-01-02 &rarr; 2022-12-30</div>
+            <div class="text-xs text-slate-400 mt-1 flex justify-between">
+              <span>Rows: <strong>1,008</strong></span>
+              <span>Hyperparameter Tuning Only</span>
+            </div>
+          </div>
+          <div class="glass-panel p-3.5 border-l-4 border-emerald-500">
+            <div class="text-[11px] font-mono text-emerald-400 uppercase">Split 3: Holdout Test Period</div>
+            <div class="text-sm font-bold text-white mt-1">2023-01-03 &rarr; 2026-08-19</div>
+            <div class="text-xs text-slate-400 mt-1 flex justify-between">
+              <span>Rows: <strong>910</strong></span>
+              <span>Scored Once Blindly</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full Metrics Comparison Table -->
+        <div class="glass-panel p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold text-white">Model Comparison Matrix</h3>
+            <span class="text-xs text-slate-400 font-mono">Target: 1-Day Forward Return</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs finance-table">
+              <thead class="bg-navy-850/80 text-slate-400 uppercase font-mono text-[10px] border-b border-navy-700">
+                <tr>
+                  <th class="py-2.5 px-3">Model</th>
+                  <th class="py-2.5 px-3">Hyperparameters</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Val MAE</th>
+                  <th class="py-2.5 px-3 font-mono text-right bg-navy-800/40">Test MAE</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Test RMSE</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Test R²</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Directional Acc</th>
+                  <th class="py-2.5 px-3 text-center">Outcome</th>
+                </tr>
+              </thead>
+              <tbody id="performance-table-body" class="divide-y divide-navy-800 font-mono-num">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Actual vs. Predicted Chart Panel -->
+        <div class="glass-panel p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-semibold text-white">Actual vs. Predicted Daily Returns (Held-Out Test Split)</h3>
+              <p class="text-xs text-slate-400">Comparing 910 out-of-sample actual returns against Ridge and Train-Mean forecasts</p>
+            </div>
+            <div class="text-xs font-mono text-slate-400">
+              Jan 2023 &ndash; Aug 2026
+            </div>
+          </div>
+          <div class="h-72 relative">
+            <canvas id="actualVsPredictedChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Residual Analysis & Residual Distribution Histogram -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- Left: Residuals over Time -->
+          <div class="glass-panel p-5 space-y-4">
+            <div>
+              <h3 class="text-base font-semibold text-white">Residual Series (Error = Actual - Predicted)</h3>
+              <p class="text-xs text-slate-400">Checking for heteroscedasticity and volatility clustering over time</p>
+            </div>
+            <div class="h-60 relative">
+              <canvas id="residualsChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Right: Residual Error Distribution Histogram -->
+          <div class="glass-panel p-5 space-y-4">
+            <div>
+              <h3 class="text-base font-semibold text-white">Residual Error Distribution</h3>
+              <p class="text-xs text-slate-400">Histogram of prediction errors centered near zero</p>
+            </div>
+            <div class="h-60 relative">
+              <canvas id="residualHistogramChart"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Explanatory Finding Box -->
+        <div class="glass-panel p-4 bg-navy-900/60 border border-navy-700/60 text-xs text-slate-300 space-y-2">
+          <h4 class="font-semibold text-slate-100 flex items-center gap-1.5">
+            <i data-lucide="info" class="w-4 h-4 text-cyan-400"></i>
+            <span>Why is the Test R² negative for all models?</span>
+          </h4>
+          <p class="text-slate-400 leading-relaxed">
+            In standard machine learning, an R² of 0 represents predicting the mean of the test set. 
+            Because ForeSightAI enforces zero look-ahead bias, the baseline model predicts the <strong>training set mean</strong> (2000–2018), not the unknown future test mean. 
+            In the 2023–2026 test period, the target variance was slightly smaller than historical levels, meaning predicting the training mean incurs a slightly negative R² (-0.0041). 
+            Ridge regression (Test R² = -0.0095) attempted to fit subtle lag dynamics that failed to generalize out-of-sample, confirming the Martingale hypothesis.
+          </p>
+        </div>
+
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- TAB 4: RISK ANALYSIS -->
+      <!-- =================================================================== -->
+      <section id="tab-risk-analysis" class="tab-content space-y-6">
+
+        <!-- Title -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-navy-800">
+          <div>
+            <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+              <span>Risk Analysis & Stress Testing</span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full bg-rose-950 border border-rose-800 text-rose-300 font-normal">
+                Deterministic Stress Scenarios
+              </span>
+            </h1>
+            <p class="text-sm text-slate-400 mt-0.5">
+              Interactive market shock simulation, historical drawdown visualization, and empirical Value-at-Risk (VaR).
+            </p>
+          </div>
+          <div class="glass-panel px-3 py-1.5 flex items-center gap-2 text-xs">
+            <i data-lucide="shield" class="w-4 h-4 text-cyan-400"></i>
+            <span class="text-slate-400">Stress Engine:</span>
+            <span class="text-slate-200 font-mono">Empirical Non-Parametric</span>
+          </div>
+        </div>
+
+        <!-- Prominent Disclaimer -->
+        <div class="p-4 rounded-xl bg-blue-950/40 border border-blue-800/80 text-blue-200/90 text-xs flex gap-3.5 items-start leading-relaxed shadow-lg">
+          <i data-lucide="shield-alert" class="w-5 h-5 text-cyan-400 shrink-0 mt-0.5"></i>
+          <div>
+            <h4 class="font-semibold text-cyan-300 text-sm mb-1">Hypothetical Scenario Calculation Notice</h4>
+            <p>
+              The stress test scenarios and portfolio simulations below are deterministic mechanical calculations based on user-entered hypothetical equity and empirical historical index distributions. 
+              <strong>They are stress-testing exercises, not predictive market forecasts.</strong>
+            </p>
+          </div>
+        </div>
+
+        <!-- Interactive Portfolio Value & Market Shock Controller -->
+        <div class="glass-panel p-6 space-y-5">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-base font-semibold text-white">Hypothetical Portfolio & Market Shock Controls</h2>
+              <p class="text-xs text-slate-400">Enter portfolio capital and trigger instant stress-test simulations</p>
+            </div>
+
+            <!-- Portfolio Input & Quick Select Pills -->
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-slate-400 font-medium">Portfolio Capital:</span>
+              <div class="relative">
+                <span class="absolute left-3 top-2 text-slate-400 font-mono text-sm">$</span>
+                <input type="number" id="portfolio-input" value="100000" min="1000" step="5000"
+                  class="bg-navy-850 border border-navy-700 rounded-lg pl-7 pr-3 py-1.5 text-sm font-mono font-bold text-white w-36 focus:outline-none focus:border-cyan-500">
+              </div>
+              <div class="flex items-center gap-1">
+                <button data-cap="10000" class="cap-chip text-[11px] font-mono px-2 py-1 rounded bg-navy-800 text-slate-300 hover:text-white">$10k</button>
+                <button data-cap="50000" class="cap-chip text-[11px] font-mono px-2 py-1 rounded bg-navy-800 text-slate-300 hover:text-white">$50k</button>
+                <button data-cap="100000" class="cap-chip active text-[11px] font-mono px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 font-medium">$100k</button>
+                <button data-cap="1000000" class="cap-chip text-[11px] font-mono px-2 py-1 rounded bg-navy-800 text-slate-300 hover:text-white">$1M</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Market Shock Buttons -->
+          <div class="space-y-2 pt-2 border-t border-navy-800">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-300 font-medium">Instant Market Shocks:</span>
+              <span class="text-slate-400 text-[11px]">Click a scenario to simulate</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <button data-shock="-10" class="shock-btn p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 hover:bg-rose-900/60 text-left transition">
+                <div class="text-[11px] text-rose-400 font-semibold uppercase">Severe Crash</div>
+                <div class="text-lg font-bold font-mono text-rose-300">-10.0%</div>
+                <div class="text-[10px] text-slate-400 mt-1">Circuit Breaker Level</div>
+              </button>
+
+              <button data-shock="-5" class="shock-btn active p-3 rounded-xl bg-rose-950/40 border-2 border-rose-600 text-left transition shadow-lg shadow-rose-950/50">
+                <div class="text-[11px] text-rose-400 font-semibold uppercase">Flash Selloff</div>
+                <div class="text-lg font-bold font-mono text-rose-300">-5.0%</div>
+                <div class="text-[10px] text-slate-400 mt-1">High Volatility Event</div>
+              </button>
+
+              <button data-shock="-3" class="shock-btn p-3 rounded-xl bg-amber-950/40 border border-amber-800/80 hover:bg-amber-900/60 text-left transition">
+                <div class="text-[11px] text-amber-400 font-semibold uppercase">Correction</div>
+                <div class="text-lg font-bold font-mono text-amber-300">-3.0%</div>
+                <div class="text-[10px] text-slate-400 mt-1">Typical Bad Day</div>
+              </button>
+
+              <button data-shock="3" class="shock-btn p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/80 hover:bg-emerald-900/60 text-left transition">
+                <div class="text-[11px] text-emerald-400 font-semibold uppercase">Strong Rally</div>
+                <div class="text-lg font-bold font-mono text-emerald-300">+3.0%</div>
+                <div class="text-[10px] text-slate-400 mt-1">Policy Pivot Day</div>
+              </button>
+
+              <button data-shock="5" class="shock-btn p-3 rounded-xl bg-emerald-950/60 border border-emerald-700/80 hover:bg-emerald-900/60 text-left transition">
+                <div class="text-[11px] text-emerald-400 font-semibold uppercase">Major Surge</div>
+                <div class="text-lg font-bold font-mono text-emerald-300">+5.0%</div>
+                <div class="text-[10px] text-slate-400 mt-1">Crisis Relief Rally</div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Custom Slider -->
+          <div class="space-y-2 pt-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">Custom Shock Slider (-20% to +20%):</span>
+              <span class="font-mono font-bold text-sm text-cyan-400" id="slider-shock-value">-5.0%</span>
+            </div>
+            <input type="range" id="shock-slider" min="-20" max="20" step="0.5" value="-5" class="w-full h-2 bg-navy-800 rounded-lg cursor-pointer">
+          </div>
+        </div>
+
+        <!-- Reactive Simulated Shock Outcome Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- P&L -->
+          <div class="glass-panel p-5 kpi-card">
+            <div class="text-xs text-slate-400 font-semibold uppercase">Hypothetical Dollar P&L</div>
+            <div class="text-2xl font-bold font-mono-num mt-2" id="sim-pnl">-$5,000.00</div>
+            <div class="text-xs text-slate-400 mt-1" id="sim-pnl-pct">Under -5.0% Market Shock</div>
+          </div>
+
+          <!-- Resulting Portfolio -->
+          <div class="glass-panel p-5 kpi-card">
+            <div class="text-xs text-slate-400 font-semibold uppercase">Resulting Portfolio Equity</div>
+            <div class="text-2xl font-bold font-mono-num text-white mt-2" id="sim-portfolio-equity">$95,000.00</div>
+            <div class="text-xs text-slate-400 mt-1">Remaining Hypothetical Capital</div>
+          </div>
+
+          <!-- Implied S&P 500 Level -->
+          <div class="glass-panel p-5 kpi-card">
+            <div class="text-xs text-slate-400 font-semibold uppercase">Implied S&P 500 Index Level</div>
+            <div class="text-2xl font-bold font-mono-num text-cyan-400 mt-2" id="sim-index-level">7,259.10</div>
+            <div class="text-xs text-slate-400 mt-1">Base Close: $7,641.16</div>
+          </div>
+        </div>
+
+        <!-- Historical Value at Risk (VaR) Panel -->
+        <div class="glass-panel p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-semibold text-white">Empirical Value at Risk (VaR) & Expected Shortfall (CVaR)</h3>
+              <p class="text-xs text-slate-400">Calculated across 6,698 trading days (2000–2026) daily return distribution</p>
+            </div>
+            <span class="text-xs font-mono text-cyan-400">1-Day Horizon</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-navy-900/60 p-4 rounded-xl border border-navy-800">
+              <div class="text-xs text-slate-400 font-mono">95% Daily VaR</div>
+              <div class="text-xl font-bold font-mono-num text-amber-400 mt-1" id="var-95-pct">-1.65%</div>
+              <div class="text-xs text-slate-300 font-mono mt-1" id="var-95-dollar">-$1,650 on $100k</div>
+              <p class="text-[10px] text-slate-400 mt-1">On 95% of days, loss will not exceed this.</p>
+            </div>
+
+            <div class="bg-navy-900/60 p-4 rounded-xl border border-navy-800">
+              <div class="text-xs text-slate-400 font-mono">95% Expected Shortfall (CVaR)</div>
+              <div class="text-xl font-bold font-mono-num text-amber-400 mt-1" id="cvar-95-pct">-2.54%</div>
+              <div class="text-xs text-slate-300 font-mono mt-1" id="cvar-95-dollar">-$2,540 on $100k</div>
+              <p class="text-[10px] text-slate-400 mt-1">Average loss when 95% VaR is breached.</p>
+            </div>
+
+            <div class="bg-navy-900/60 p-4 rounded-xl border border-navy-800">
+              <div class="text-xs text-slate-400 font-mono">99% Daily VaR</div>
+              <div class="text-xl font-bold font-mono-num text-rose-400 mt-1" id="var-99-pct">-2.85%</div>
+              <div class="text-xs text-slate-300 font-mono mt-1" id="var-99-dollar">-$2,850 on $100k</div>
+              <p class="text-[10px] text-slate-400 mt-1">Extreme tail loss threshold (1 in 100 days).</p>
+            </div>
+
+            <div class="bg-navy-900/60 p-4 rounded-xl border border-navy-800">
+              <div class="text-xs text-slate-400 font-mono">99% Expected Shortfall (CVaR)</div>
+              <div class="text-xl font-bold font-mono-num text-rose-400 mt-1" id="cvar-99-pct">-4.12%</div>
+              <div class="text-xs text-slate-300 font-mono mt-1" id="cvar-99-dollar">-$4,120 on $100k</div>
+              <p class="text-[10px] text-slate-400 mt-1">Average loss in the worst 1% tail events.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Historical Underwater Drawdown Chart -->
+        <div class="glass-panel p-5 space-y-4">
+          <div>
+            <h3 class="text-base font-semibold text-white">Historical Drawdown Underwater Curve (2000–2026)</h3>
+            <p class="text-xs text-slate-400">Percentage drop from running all-time peak close across 25+ years of market history</p>
+          </div>
+          <div class="h-64 relative">
+            <canvas id="historicalDrawdownChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Major Historical Stress Scenarios Table -->
+        <div class="glass-panel p-5 space-y-4">
+          <div>
+            <h3 class="text-base font-semibold text-white">Historical Crisis Benchmarks vs. Current Portfolio</h3>
+            <p class="text-xs text-slate-400">Estimated portfolio impact if major historical crisis drawdowns recurred today</p>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs finance-table">
+              <thead class="bg-navy-850/80 text-slate-400 uppercase font-mono text-[10px] border-b border-navy-700">
+                <tr>
+                  <th class="py-2.5 px-3">Historical Event</th>
+                  <th class="py-2.5 px-3">Period</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Index Drawdown</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Hypothetical Dollar Loss</th>
+                  <th class="py-2.5 px-3 font-mono text-right">Resulting Equity</th>
+                  <th class="py-2.5 px-3">Context & Catalyst</th>
+                </tr>
+              </thead>
+              <tbody id="stress-table-body" class="divide-y divide-navy-800 font-mono-num">
+                <!-- Dynamically generated via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- APPLICATION JAVASCRIPT -->
+  <script src="/static/app.js"></script>
+</body>
+</html>

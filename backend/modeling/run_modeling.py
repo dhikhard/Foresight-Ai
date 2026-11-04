@@ -1,4 +1,4 @@
-"""Train and evaluate the first ForeSight forecasting baselines.
+"""Train and evaluate the ForeSight forecasting baselines.
 
 Usage (from repository root):
     python -m backend.modeling.run_modeling                # Feature Set V1
@@ -6,8 +6,9 @@ Usage (from repository root):
 
 Loads data/processed/sp500_features[_v2].csv + sp500_targets.csv, builds the
 model-ready dataset, fits preprocessing on TRAIN only, and evaluates
-baselines plus ridge regression. Ridge hyperparameters are selected on
-VALIDATION only; TEST is scored once as a final holdout.
+baselines plus regularized linear models (ridge, elastic net). Ridge and
+elastic-net hyperparameters are selected on VALIDATION only; TEST is scored
+once as a final holdout.
 """
 
 import argparse
@@ -29,11 +30,12 @@ from backend.modeling.dataset import (
 )
 from backend.modeling.evaluation import metrics
 from backend.modeling.preprocessing import TrainOnlyStandardizer
-from backend.modeling.regression import RidgeRegressor
+from backend.modeling.regression import ElasticNetRegressor, RidgeRegressor
 from backend.pipeline.config import PipelineConfig
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ALPHA_GRID = (0.01, 0.1, 1.0, 10.0, 100.0)
+DEFAULT_L1_RATIO_GRID = (0.1, 0.3, 0.5, 0.7, 0.9)
 
 
 def _evaluate_split(name, y_true, y_pred) -> dict:
@@ -42,6 +44,7 @@ def _evaluate_split(name, y_true, y_pred) -> dict:
 
 def run(features_path: Path, targets_path: Path, out_path: Path,
         alpha_grid: tuple[float, ...] = DEFAULT_ALPHA_GRID,
+        l1_ratio_grid: tuple[float, ...] = DEFAULT_L1_RATIO_GRID,
         config: PipelineConfig | None = None,
         feature_set: str = "v1") -> dict:
     config = config or PipelineConfig()
@@ -121,6 +124,41 @@ def run(features_path: Path, targets_path: Path, out_path: Path,
         ],
     }
 
+    # Elastic Net: same protocol as ridge above. Every (alpha, l1_ratio)
+    # pair is fit on the TRAIN-standardized matrix and scored on
+    # VALIDATION only; the winning pair is refit on TRAIN and scored on
+    # TEST exactly once. Note that elastic net's objective is scaled by
+    # 1/(2n), so its alpha grid is NOT on the same numerical scale as
+    # ridge's unnormalized alpha grid -- see the report's protocol block.
+    enet_scores = []
+    for alpha in alpha_grid:
+        for l1_ratio in l1_ratio_grid:
+            enet = ElasticNetRegressor(alpha=alpha, l1_ratio=l1_ratio)
+            enet.fit(transformed["train"], train["y"])
+            enet_val = metrics(splits["validation"]["y"],
+                               enet.predict(transformed["validation"]))
+            enet_scores.append({"alpha": alpha, "l1_ratio": l1_ratio,
+                                "val_mae": enet_val["mae"]})
+    best_enet = min(enet_scores, key=lambda s: s["val_mae"])
+    enet = ElasticNetRegressor(alpha=best_enet["alpha"],
+                               l1_ratio=best_enet["l1_ratio"])
+    enet.fit(transformed["train"], train["y"])
+    results["elastic_net"] = {
+        "model": "elastic_net",
+        "selection": {"method": "validation MAE",
+                      "alpha_grid": list(alpha_grid),
+                      "l1_ratio_grid": list(l1_ratio_grid),
+                      "scores": enet_scores,
+                      "chosen_alpha": best_enet["alpha"],
+                      "chosen_l1_ratio": best_enet["l1_ratio"]},
+        "weights": enet.to_dict(),
+        "splits": [
+            _evaluate_split(split, splits[split]["y"],
+                            enet.predict(transformed[split]))
+            for split in ("train", "validation", "test")
+        ],
+    }
+
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "feature_set": feature_set,
@@ -144,12 +182,27 @@ def run(features_path: Path, targets_path: Path, out_path: Path,
                 "criterion": "validation MAE",
                 "grid": list(alpha_grid),
             },
+            "elastic_net_selection": {
+                "criterion": "validation MAE",
+                "alpha_grid": list(alpha_grid),
+                "l1_ratio_grid": list(l1_ratio_grid),
+                "objective": "(1/(2n))*||y-Xw-b||^2 + alpha*l1_ratio*||w||_1 "
+                             "+ alpha*(1-l1_ratio)/2*||w||^2",
+                "solver": "numpy cyclic coordinate descent, "
+                          "intercept unregularized",
+                "alpha_scale_note":
+                    "elastic net's 1/(2n) objective scaling puts its alpha "
+                    "grid on a different numerical scale from ridge's "
+                    "unnormalized alpha grid; the two grids are therefore "
+                    "not directly comparable",
+            },
             "test_discipline":
                 "TEST scored once as holdout after all decisions are frozen; "
                 "never used for model, feature-set, or hyperparameter choices",
-            "feature_set_winner_rule":
-                "lower validation ridge MAE between v1 and v2 wins; test "
-                "metrics do not change the winner",
+            "feature_set_comparison":
+                "not performed; each feature set (v1, v2) is trained and "
+                "reported independently, and this report does not compare or "
+                "select between feature sets",
             "methodology_version": 2,
             "methodology_notes":
                 "2026-08-23: corrected ridge fit/predict scale mismatch "
@@ -209,6 +262,10 @@ def main() -> None:
                   f"{row['directional_accuracy']:>9.4f}")
     chosen = payload["results"]["ridge"]["selection"]["chosen_alpha"]
     print(f"\nridge alpha selected on validation only: {chosen}")
+    enet_sel = payload["results"]["elastic_net"]["selection"]
+    print(f"elastic net selected on validation only: "
+          f"alpha={enet_sel['chosen_alpha']}, "
+          f"l1_ratio={enet_sel['chosen_l1_ratio']}")
     print(f"report written to {out_path}")
 
 
